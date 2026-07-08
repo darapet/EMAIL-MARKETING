@@ -1,57 +1,63 @@
 /**
  * server/middleware/auth.js
- * Auth middleware — Firebase ID token verification (production)
- * or local-dev shortcut gated by NODE_ENV=development AND explicit DEV_AUTH=true.
+ * JWT authentication middleware using Supabase
  *
- * Default: Firebase token required.
- * Dev shortcut: only active when BOTH NODE_ENV=development AND DEV_AUTH=true.
+ * Verifies the Bearer token in Authorization header against Supabase,
+ * then attaches req.userId and req.user to the request.
  */
 
 'use strict';
 
-const { getAuth } = require('../config/firebase');
+const { getDb } = require('../config/supabase');
 
 /**
- * requireAuth middleware
- * Verifies the Firebase Bearer token on every request.
- * Dev shortcut (X-User-Id header) only works when NODE_ENV=development
- * AND the DEV_AUTH=true flag is explicitly set — never in production.
+ * requireAuth middleware — protects all routes that need a logged-in user.
+ * Frontend must send: Authorization: Bearer <supabase_access_token>
  */
 async function requireAuth(req, res, next) {
-  // ── Dev shortcut (must be opt-in AND non-production) ────────────
-  const isDevShortcut =
-    process.env.NODE_ENV === 'development' &&
-    process.env.DEV_AUTH === 'true';
-
-  if (isDevShortcut) {
-    const devId = req.headers['x-user-id'];
-    if (!devId || devId.trim() === '') {
-      return res.status(401).json({ error: 'x-user-id header required in dev mode' });
-    }
-    req.userId = devId.trim();
-    return next();
-  }
-
-  // ── Production: Firebase ID token in Authorization header ────────
-  const authHeader = req.headers['authorization'] || '';
-  const token      = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-
-  if (!token) {
-    return res.status(401).json({ error: 'No authentication token provided' });
-  }
-
   try {
-    const firebaseAuth = getAuth();
-    if (!firebaseAuth) {
-      return res.status(503).json({ error: 'Auth service not configured — set Firebase env vars' });
+    const header = req.headers.authorization || '';
+    if (!header.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Missing or invalid Authorization header.' });
     }
-    const decoded  = await firebaseAuth.verifyIdToken(token);
-    req.userId     = decoded.uid;
-    req.userEmail  = decoded.email;
+
+    const token = header.slice(7).trim();
+    const db = getDb();
+
+    // Verify the token via Supabase Auth
+    const { data, error } = await db.auth.getUser(token);
+    if (error || !data?.user) {
+      return res.status(401).json({ error: 'Invalid or expired token.' });
+    }
+
+    req.userId      = data.user.id;
+    req.userEmail   = data.user.email;
+    req.accessToken = token;
+
+    // Attach the full profile (includes plan, is_admin, SMTP settings)
+    const { data: profile } = await db
+      .from('profiles')
+      .select('*')
+      .eq('id', data.user.id)
+      .single();
+
+    req.user = profile || { id: data.user.id, email: data.user.email, plan: 'free', is_admin: false };
+
     next();
   } catch (err) {
-    return res.status(401).json({ error: 'Invalid or expired token' });
+    next(err);
   }
 }
 
-module.exports = { requireAuth };
+/**
+ * requireAdmin middleware — restricts routes to admin users only.
+ * Must be used AFTER requireAuth.
+ */
+function requireAdmin(req, res, next) {
+  if (!req.user?.is_admin) {
+    return res.status(403).json({ error: 'Admin access required.' });
+  }
+  next();
+}
+
+module.exports = { requireAuth, requireAdmin };

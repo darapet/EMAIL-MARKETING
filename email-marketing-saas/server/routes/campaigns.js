@@ -1,132 +1,140 @@
 /**
  * server/routes/campaigns.js
- * CRUD for Scraping Campaigns + launch trigger
+ * CRUD for Scraping Campaigns + scrape trigger
+ *
+ * Routes:
+ *   GET    /api/campaigns                — list user's campaigns
+ *   GET    /api/campaigns/:id            — single campaign + leads preview
+ *   POST   /api/campaigns                — create + trigger scrape
+ *   DELETE /api/campaigns/:id            — delete campaign + its leads
  */
 
 'use strict';
 
-const express  = require('express');
-const { v4: uuidv4 }  = require('uuid');
-const { getDb }        = require('../config/firebase');
-const { requireAuth }  = require('../middleware/auth');
-const scraperService   = require('../services/scraper');
+const express           = require('express');
+const { v4: uuidv4 }   = require('uuid');
+const { getDb }         = require('../config/supabase');
+const { requireAuth }   = require('../middleware/auth');
+const { logActivity }   = require('../services/activity-logger');
+const scraperService    = require('../services/scraper');
 
 const router = express.Router();
 router.use(requireAuth);
 
-/* ── GET /api/campaigns ──────────────────────────────────────────── */
+// ─── GET /api/campaigns ───────────────────────────────────────────────────────
 router.get('/', async (req, res, next) => {
   try {
     const db = getDb();
-    if (!db) return res.json({ campaigns: [] }); // demo mode
+    const { data, error } = await db
+      .from('campaigns')
+      .select('id,name,niche,channels,countries,states,status,total_leads,scraped_at,created_at')
+      .eq('user_id', req.userId)
+      .order('created_at', { ascending: false })
+      .limit(100);
 
-    const snap = await db.collection('campaigns')
-      .where('userId', '==', req.userId)
-      .orderBy('createdAt', 'desc')
-      .limit(100)
-      .get();
-
-    const campaigns = snap.docs.map(doc => ({ campaignId: doc.id, ...doc.data() }));
-    return res.json({ campaigns });
+    if (error) return res.status(400).json({ error: error.message });
+    return res.json({ campaigns: data });
   } catch (err) {
     next(err);
   }
 });
 
-/* ── GET /api/campaigns/:id ──────────────────────────────────────── */
+// ─── GET /api/campaigns/:id ───────────────────────────────────────────────────
+// Returns campaign details + all scraped leads (for preview before sending)
 router.get('/:id', async (req, res, next) => {
   try {
     const db = getDb();
-    if (!db) return res.status(503).json({ error: 'Firebase not configured' });
 
-    const doc = await db.collection('campaigns').doc(req.params.id).get();
-    if (!doc.exists || doc.data().userId !== req.userId) {
-      return res.status(404).json({ error: 'Campaign not found' });
-    }
-    return res.json({ campaignId: doc.id, ...doc.data() });
+    // Campaign
+    const { data: campaign, error: cErr } = await db
+      .from('campaigns')
+      .select('*')
+      .eq('id', req.params.id)
+      .eq('user_id', req.userId)
+      .single();
+
+    if (cErr || !campaign) return res.status(404).json({ error: 'Campaign not found.' });
+
+    // Leads for this campaign
+    const { data: leads, error: lErr } = await db
+      .from('leads')
+      .select('id,business_name,email,phone,whatsapp_valid,social_urls,opted_out,created_at')
+      .eq('campaign_id', req.params.id)
+      .eq('opted_out', false)
+      .order('created_at', { ascending: false });
+
+    if (lErr) return res.status(400).json({ error: lErr.message });
+
+    return res.json({ campaign, leads: leads || [] });
   } catch (err) {
     next(err);
   }
 });
 
-/* ── POST /api/campaigns ─────────────────────────────────────────── */
+// ─── POST /api/campaigns ──────────────────────────────────────────────────────
+// Create a campaign and start the scraper asynchronously.
+// Body: { name, niche, channels[], countries[], states{}, emailCount? }
 router.post('/', async (req, res, next) => {
   try {
-    const { name, niche, depth = 2, channels = [], locations = [] } = req.body;
+    const { name, niche, channels, countries, states, emailCount } = req.body;
 
-    if (!name || !niche) {
-      return res.status(400).json({ error: 'name and niche are required' });
+    if (!niche || !countries?.length) {
+      return res.status(400).json({ error: 'niche and at least one country are required.' });
     }
-
-    const campaignId = uuidv4();
-    const campaign   = {
-      campaignId,
-      userId:     req.userId,
-      name:       name.trim(),
-      niche:      niche.trim(),
-      depth,
-      channels,
-      locations,
-      status:     'running',
-      leadsCount: 0,
-      createdAt:  new Date(),
-    };
 
     const db = getDb();
-    if (db) {
-      await db.collection('campaigns').doc(campaignId).set(campaign);
-    }
 
-    // Kick off background scraper (non-blocking)
-    scraperService.run({ campaignId, userId: req.userId, niche, depth, channels, locations })
-      .catch(err => console.error('[Scraper] Error:', err.message));
+    // Create campaign record
+    const { data: campaign, error } = await db
+      .from('campaigns')
+      .insert({
+        id:       uuidv4(),
+        user_id:  req.userId,
+        name:     name || `${niche} campaign`,
+        niche,
+        channels: channels || ['email'],
+        countries: countries || [],
+        states:    states || {},
+        status:   'running',
+      })
+      .select()
+      .single();
 
-    return res.status(201).json(campaign);
+    if (error) return res.status(400).json({ error: error.message });
+
+    await logActivity(req.userId, 'scrape_start', { campaignId: campaign.id, niche, countries, emailCount });
+
+    // Fire scraper in the background (non-blocking)
+    scraperService
+      .runScrape({ campaignId: campaign.id, userId: req.userId, niche, countries, states, channels: channels || ['email'], emailCount })
+      .catch((err) => console.error('[Scraper] Error:', err.message));
+
+    return res.status(201).json({ campaign });
   } catch (err) {
     next(err);
   }
 });
 
-/* ── DELETE /api/campaigns/:id ───────────────────────────────────── */
+// ─── DELETE /api/campaigns/:id ────────────────────────────────────────────────
 router.delete('/:id', async (req, res, next) => {
   try {
     const db = getDb();
-    if (!db) return res.status(503).json({ error: 'Firebase not configured' });
-
-    const docRef = db.collection('campaigns').doc(req.params.id);
-    const doc    = await docRef.get();
-    if (!doc.exists || doc.data().userId !== req.userId) {
-      return res.status(404).json({ error: 'Campaign not found' });
-    }
-
-    await docRef.delete();
-    return res.json({ success: true });
-  } catch (err) {
-    next(err);
-  }
-});
-
-/* ── GET /api/campaigns/:id/leads ────────────────────────────────── */
-router.get('/:id/leads', async (req, res, next) => {
-  try {
-    const db = getDb();
-    if (!db) return res.json({ leads: [] });
 
     // Verify ownership
-    const campaignDoc = await db.collection('campaigns').doc(req.params.id).get();
-    if (!campaignDoc.exists || campaignDoc.data().userId !== req.userId) {
-      return res.status(404).json({ error: 'Campaign not found' });
-    }
+    const { data: camp } = await db
+      .from('campaigns')
+      .select('id')
+      .eq('id', req.params.id)
+      .eq('user_id', req.userId)
+      .single();
 
-    const snap = await db
-      .collection('campaigns').doc(req.params.id)
-      .collection('leads')
-      .orderBy('createdAt', 'desc')
-      .limit(500)
-      .get();
+    if (!camp) return res.status(404).json({ error: 'Campaign not found.' });
 
-    const leads = snap.docs.map(doc => ({ leadId: doc.id, ...doc.data() }));
-    return res.json({ leads });
+    // Cascade: delete leads first, then campaign
+    await db.from('leads').delete().eq('campaign_id', req.params.id);
+    await db.from('campaigns').delete().eq('id', req.params.id);
+
+    return res.json({ message: 'Campaign deleted.' });
   } catch (err) {
     next(err);
   }

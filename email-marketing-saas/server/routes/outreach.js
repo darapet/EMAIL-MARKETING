@@ -1,134 +1,264 @@
 /**
  * server/routes/outreach.js
- * Email outreach pipeline via Brevo Transactional SMTP
+ * Email Outreach Pipeline
+ *
+ * Routes:
+ *   POST /api/outreach/email          — send emails to all leads in a campaign
+ *   POST /api/outreach/email/preview  — preview email HTML before sending
+ *   GET  /api/outreach/history        — paginated send history
+ *   GET  /api/outreach/stats          — aggregate send stats for the user
+ *
+ * Flow:
+ *   1. Frontend scrapes → shows leads preview → user selects recipients
+ *   2. User chooses SMTP provider (system vs own)
+ *   3. POST /api/outreach/email is called with selected lead IDs
+ *   4. Emails are sent one by one with delay, every send is recorded
  */
 
 'use strict';
 
-const express  = require('express');
-const { getDb }       = require('../config/firebase');
-const { requireAuth } = require('../middleware/auth');
-const emailService    = require('../services/email-sender');
+const express           = require('express');
+const { getDb }         = require('../config/supabase');
+const { requireAuth }   = require('../middleware/auth');
+const { logActivity }   = require('../services/activity-logger');
+const { sendEmail }     = require('../services/email-sender');
+
+const SEND_DELAY_MS = parseInt(process.env.EMAIL_SEND_DELAY_MS || '1500'); // 1.5s between sends
 
 const router = express.Router();
 router.use(requireAuth);
 
-/* ── POST /api/outreach/email ────────────────────────────────────── */
-// Launch email campaign for all leads in a campaign
+// ─── POST /api/outreach/email ─────────────────────────────────────────────────
+/**
+ * Body:
+ * {
+ *   campaignId:  string,
+ *   leadIds:     string[] | 'all',   // specific IDs or 'all'
+ *   subject:     string,
+ *   body:        string,
+ *   templateId?: string,             // optional — use saved template
+ *   provider?:   'system'|'brevo'|'sendgrid'|'mailgun'|'smtp',
+ * }
+ */
 router.post('/email', async (req, res, next) => {
   try {
-    const {
-      campaignId,
-      subject,
-      body,
-      includeLogo  = true,
-      includePhone = true,
-      logoUrl      = '',
-    } = req.body;
+    const { campaignId, leadIds, subject, body, templateId, provider } = req.body;
 
     if (!campaignId || !subject || !body) {
-      return res.status(400).json({ error: 'campaignId, subject, and body are required' });
+      return res.status(400).json({ error: 'campaignId, subject, and body are required.' });
     }
 
-    // Load user profile for merge fields
     const db = getDb();
-    let userProfile = {};
-    if (db) {
-      const userDoc = await db.collection('users').doc(req.userId).get();
-      if (userDoc.exists) userProfile = userDoc.data();
+
+    // Load campaign (verify ownership)
+    const { data: campaign, error: cErr } = await db
+      .from('campaigns')
+      .select('id,niche,user_id')
+      .eq('id', campaignId)
+      .eq('user_id', req.userId)
+      .single();
+
+    if (cErr || !campaign) return res.status(404).json({ error: 'Campaign not found.' });
+
+    // Load user profile (includes SMTP keys, branding)
+    const userProfile = { ...req.user };
+
+    // If a specific provider is requested and user has permission, override active_smtp
+    if (provider && provider !== userProfile.active_smtp) {
+      // Only premium users can switch providers; admins always allowed
+      if (userProfile.plan !== 'premium' && !userProfile.is_admin) {
+        return res.status(403).json({
+          error: 'Using your own SMTP provider requires a premium plan.',
+          upgrade_required: true,
+        });
+      }
+      userProfile.active_smtp = provider;
     }
 
-    // ── Ownership check — must own the campaign ──────────────────
-    if (db) {
-      const campaignDoc = await db.collection('campaigns').doc(campaignId).get();
-      if (!campaignDoc.exists || campaignDoc.data().userId !== req.userId) {
-        return res.status(403).json({ error: 'Campaign not found or access denied' });
+    // Load template if provided
+    let logoUrl = userProfile.logo_url || '';
+    let signatureUrl = '';
+    if (templateId) {
+      const { data: tpl } = await db
+        .from('email_templates')
+        .select('logo_url,signature_url')
+        .eq('id', templateId)
+        .eq('user_id', req.userId)
+        .single();
+      if (tpl) {
+        logoUrl      = tpl.logo_url      || logoUrl;
+        signatureUrl = tpl.signature_url || '';
       }
     }
 
-    // Load leads with email addresses (scoped to verified campaign)
-    let leads = [];
-    if (db) {
-      const snap = await db
-        .collection('campaigns').doc(campaignId)
-        .collection('leads')
-        .where('status', '!=', 'optout')
-        .get();
-      leads = snap.docs
-        .map(d => ({ leadId: d.id, ...d.data() }))
-        .filter(l => l.email);
+    // Load leads
+    let leadQuery = db
+      .from('leads')
+      .select('id,business_name,email,phone')
+      .eq('campaign_id', campaignId)
+      .eq('opted_out', false)
+      .not('email', 'is', null);
+
+    if (Array.isArray(leadIds) && leadIds.length > 0) {
+      leadQuery = leadQuery.in('id', leadIds);
     }
 
-    if (!leads.length) {
-      return res.status(400).json({ error: 'No leads with email addresses found in this campaign' });
-    }
+    const { data: leads, error: lErr } = await leadQuery;
+    if (lErr) return res.status(400).json({ error: lErr.message });
+    if (!leads?.length) return res.status(400).json({ error: 'No eligible leads found.' });
 
-    // Queue async sends (non-blocking)
-    emailService.startCampaign({
-      userId:      req.userId,
-      campaignId,
-      leads,
-      subject,
-      bodyTemplate: body,
-      userProfile,
-      includeLogo,
-      includePhone,
-      logoUrl:     logoUrl || userProfile.logoUrl || '',
-    }).catch(err => console.error('[Email Campaign] Error:', err.message));
-
-    return res.json({ success: true, queued: leads.length });
-  } catch (err) {
-    next(err);
-  }
-});
-
-/* ── POST /api/outreach/test-email ───────────────────────────────── */
-router.post('/test-email', async (req, res, next) => {
-  try {
-    const { to, subject, html } = req.body;
-    if (!to || !subject || !html) {
-      return res.status(400).json({ error: 'to, subject, and html are required' });
-    }
-
-    // Load user's Brevo API key
-    const db = getDb();
-    let brevoApiKey = process.env.BREVO_API_KEY;
-    if (db) {
-      const userDoc = await db.collection('users').doc(req.userId).get();
-      if (userDoc.exists && userDoc.data().brevoApiKey) {
-        brevoApiKey = userDoc.data().brevoApiKey;
-      }
-    }
-
-    await emailService.sendSingle({
-      brevoApiKey,
-      to,
-      subject,
-      html,
-      fromName:  'LeadForge Test',
-      fromEmail: process.env.FROM_EMAIL || 'noreply@leadforge.io',
+    // Respond immediately — send in background
+    res.json({
+      message: `Email campaign started. Sending to ${leads.length} lead(s).`,
+      total:   leads.length,
+      provider: userProfile.active_smtp || 'system',
     });
 
-    return res.json({ success: true });
+    // ── Background send loop ────────────────────────────────────────────────
+    await logActivity(req.userId, 'email_blast_start', {
+      campaignId,
+      total:    leads.length,
+      provider: userProfile.active_smtp,
+    });
+
+    let sentCount   = 0;
+    let failedCount = 0;
+
+    for (const lead of leads) {
+      if (!lead.email) continue;
+
+      let status   = 'sent';
+      let errorMsg = null;
+
+      try {
+        await sendEmail(userProfile, {
+          toEmail:      lead.email,
+          subject,
+          body,
+          businessName: lead.business_name || '',
+          niche:        campaign.niche      || '',
+          logoUrl,
+          signatureUrl,
+        });
+        sentCount++;
+      } catch (err) {
+        status   = 'failed';
+        errorMsg = err.message;
+        failedCount++;
+        console.error(`[Outreach] Failed to send to ${lead.email}:`, err.message);
+      }
+
+      // Record every send
+      await db.from('email_sends').insert({
+        user_id:     req.userId,
+        campaign_id: campaignId,
+        lead_id:     lead.id,
+        template_id: templateId || null,
+        to_email:    lead.email,
+        subject,
+        status,
+        provider:    userProfile.active_smtp || 'system',
+        error_msg:   errorMsg,
+      }).catch((e) => console.error('[Outreach] Failed to log send:', e.message));
+
+      // Delay between sends to avoid rate-limiting
+      await new Promise((r) => setTimeout(r, SEND_DELAY_MS));
+    }
+
+    await logActivity(req.userId, 'email_blast_done', {
+      campaignId,
+      sent:   sentCount,
+      failed: failedCount,
+    });
+
+    console.log(`[Outreach] Campaign ${campaignId}: ${sentCount} sent, ${failedCount} failed`);
   } catch (err) {
     next(err);
   }
 });
 
-/* ── GET /api/outreach/logs ──────────────────────────────────────── */
-router.get('/logs', async (req, res, next) => {
+// ─── POST /api/outreach/email/preview ────────────────────────────────────────
+// Returns the rendered HTML email for preview in the browser (no send)
+router.post('/email/preview', async (req, res, next) => {
+  try {
+    const { buildHtml } = require('../services/email-sender');
+    const {
+      subject, body,
+      businessName = 'Acme Corp',
+      niche        = 'Restaurant',
+      logoUrl      = '',
+      signatureUrl = '',
+    } = req.body;
+
+    if (!subject || !body) return res.status(400).json({ error: 'subject and body are required.' });
+
+    const user = req.user;
+    const html = buildHtml({
+      subject, body,
+      logoUrl:      logoUrl      || user.logo_url  || '',
+      signatureUrl: signatureUrl || '',
+      phone:        user.phone   || '',
+      company:      user.company || user.name || 'LeadForge',
+      brandColor:   user.brand_color || '#dc2626',
+      businessName,
+      niche,
+      yourName:     user.name    || '',
+    });
+
+    return res.json({ html });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── GET /api/outreach/history ────────────────────────────────────────────────
+router.get('/history', async (req, res, next) => {
+  try {
+    const limit      = Math.min(parseInt(req.query.limit  || '50'), 200);
+    const offset     = parseInt(req.query.offset || '0');
+    const campaignId = req.query.campaign_id;
+
+    const db = getDb();
+    let query = db
+      .from('email_sends')
+      .select('id,to_email,subject,status,provider,error_msg,sent_at,campaign_id', { count: 'exact' })
+      .eq('user_id', req.userId)
+      .order('sent_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (campaignId) query = query.eq('campaign_id', campaignId);
+
+    const { data, error, count } = await query;
+    if (error) return res.status(400).json({ error: error.message });
+
+    return res.json({ sends: data, total: count, limit, offset });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── GET /api/outreach/stats ──────────────────────────────────────────────────
+router.get('/stats', async (req, res, next) => {
   try {
     const db = getDb();
-    if (!db) return res.json({ logs: [] });
 
-    const snap = await db.collection('outreach_logs')
-      .where('userId', '==', req.userId)
-      .orderBy('sentAt', 'desc')
-      .limit(200)
-      .get();
+    const { data, error } = await db
+      .from('email_sends')
+      .select('status')
+      .eq('user_id', req.userId);
 
-    const logs = snap.docs.map(d => ({ logId: d.id, ...d.data() }));
-    return res.json({ logs });
+    if (error) return res.status(400).json({ error: error.message });
+
+    const stats = (data || []).reduce(
+      (acc, row) => {
+        acc.total++;
+        acc[row.status] = (acc[row.status] || 0) + 1;
+        return acc;
+      },
+      { total: 0, sent: 0, failed: 0, bounced: 0, opted_out: 0 }
+    );
+
+    return res.json({ stats });
   } catch (err) {
     next(err);
   }

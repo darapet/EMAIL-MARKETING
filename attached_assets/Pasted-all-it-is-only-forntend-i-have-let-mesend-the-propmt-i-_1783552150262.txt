@@ -1,0 +1,38 @@
+all it is only forntend i have let mesend the propmt i use to geberate it for you You are an expert full-stack developer specializing in Node.js, asynchronous scrapers, WebSockets, and multi-tenant architectures. Build a production-ready, highly organized B2B Lead Generation and Multi-Tenant Outreach SaaS using Express, Socket.io, Baileys (for WhatsApp), and the Brevo Transactional SMTP SDK.
+
+Follow this exact feature structural architecture:
+
+### 1. Database & State Schema (NoSQL/SQL Concept)
+Structure data model entities for:
+- Users: Storage for account credentials, custom company profile text, brand Logo URL, custom phone number, and a user-provided Brevo API key.
+- WhatsApp Sessions: Unique storage directory paths mapped per User ID to isolate independent user multi-file authentication keys.
+- Scraping Campaigns: Unique Campaign ID, Niche Category Name, Target Channels Object, Geographic Boundaries, Timestamp, and an array referencing generated Leads.
+- Leads Table: Campaign ID reference, Targeted Business Name, Parsed Corporate Email, List of up to 15 scraped Social URL keys, Checked WhatsApp Phone Number, and Verification Status.
+
+### 2. Multi-Filter Wizard UI (Frontend Interface)
+Write a clean, responsive HTML, CSS (using Tailwind or raw CSS), and vanilla JavaScript template dashboard containing:
+- Multi-Check Channel Panel: Checkboxes for Target Extractions: Email, WhatsApp, Facebook, Instagram, TikTok, Twitter/X, and 10 other common channels.
+- Niche Text Input Field: For industry strings (e.g., "Restaurant", "Boutique").
+- Cascading Location Inputs: A preloaded list of global Countries. Checking a country triggers an asynchronous layout reveal displaying checkable States/Regions inside that specific nation.
+- Campaign Explorer Panel: An administrative data table organizing past crawls by Campaign ID, displaying total leads found, and a navigation button to view that specific niche list.
+
+### 3. Asynchronous Scraper Engine & Verification
+Build a background scraping engine that:
+- Executes custom search dorks and parses business URLs matching the selected niche/location.
+- Deep-crawls target web domains directly to fetch public corporate emails and loops through HTML anchor tags matching up to 15 specific social domains.
+- Isolates phone strings and checks active WhatsApp availability via the user’s connected Baileys socket string before committing the row to the database.
+
+### 4. Low-RAM Multi-Tenant WhatsApp Session Manager
+Implement an isolated socket broker using the open-source 'Baileys' library:
+- Do not use headless browsers or puppeteer instances to conserve server memory.
+- Provide a unique WebSocket channel via Socket.io mapping a real-time login QR code directly to the specific user's web panel.
+- Hold active user sockets in an indexed server Memory Map (activeUserSessions = new Map()).
+- Add a feature toggle permitting users to either broadcast messages out to their freshly scraped Niche Campaign ID or download and send to their existing physical phone contact log (sock.contacts).
+
+### 5. Multi-Channel Outreach and Anti-Ban Automation
+Program the delivery engine with strict safety pipelines:
+- Email Pipeline: Automatically embed the user's uploaded Logo URL, business phone number, and company metadata directly into a professional HTML/CSS framework. Inject the AI proposal body string dynamically and route the message via Brevo's Transactional SMTP client.
+- WhatsApp Anti-Ban Core: Force message dispatch tasks through a background queue using randomized jitter delays between 60 to 180 seconds per text. Before each text, execute sendPresenceUpdate('composing') for a randomized duration to mock human hand-typing.
+- Opt-Out Circuit Breaker: Automatically append an outbound footer string: "Reply 'STOP' to opt out." Intercept incoming 'STOP' messages, flag that lead as deactivated in the database to halt future tasks, and calculate reply metrics.
+
+Generate clean, well-commented modular backend code architecture alongside the corresponding frontend dashboard layouts.
