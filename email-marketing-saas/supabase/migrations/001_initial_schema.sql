@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   name              TEXT,
   company           TEXT,
   phone             TEXT,
-  desc              TEXT,
+  description       TEXT,
 
   -- Branding
   logo_url          TEXT,

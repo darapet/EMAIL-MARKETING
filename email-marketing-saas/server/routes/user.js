@@ -27,7 +27,7 @@ router.get('/profile', async (req, res, next) => {
     const db = getDb();
     const { data, error } = await db
       .from('profiles')
-      .select('id,email,name,company,phone,desc,logo_url,brand_color,plan,is_admin,active_smtp,created_at')
+      .select('id,email,name,company,phone,description,logo_url,brand_color,plan,is_admin,active_smtp,created_at')
       .eq('id', req.userId)
       .single();
 
@@ -42,7 +42,7 @@ router.get('/profile', async (req, res, next) => {
 // ─── PUT /api/user/profile ────────────────────────────────────────────────────
 router.put('/profile', async (req, res, next) => {
   try {
-    const allowed = ['name', 'company', 'phone', 'desc', 'logo_url', 'brand_color'];
+    const allowed = ['name', 'company', 'phone', 'description', 'logo_url', 'brand_color'];
     const updates = Object.fromEntries(
       Object.entries(req.body).filter(([k]) => allowed.includes(k))
     );
