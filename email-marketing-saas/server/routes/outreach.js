@@ -38,7 +38,15 @@ router.post('/email', async (req, res, next) => {
       if (userDoc.exists) userProfile = userDoc.data();
     }
 
-    // Load leads with email addresses
+    // ── Ownership check — must own the campaign ──────────────────
+    if (db) {
+      const campaignDoc = await db.collection('campaigns').doc(campaignId).get();
+      if (!campaignDoc.exists || campaignDoc.data().userId !== req.userId) {
+        return res.status(403).json({ error: 'Campaign not found or access denied' });
+      }
+    }
+
+    // Load leads with email addresses (scoped to verified campaign)
     let leads = [];
     if (db) {
       const snap = await db

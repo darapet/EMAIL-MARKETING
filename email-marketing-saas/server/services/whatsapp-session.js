@@ -50,19 +50,54 @@ function init(io, logger) {
   // Store io globally for scraper service
   global._io = io;
 
-  io.on('connection', (socket) => {
-    _logger.info({ socketId: socket.id }, '[WA] Socket connected');
+  // ── Socket.io auth middleware ─────────────────────────────────
+  // Verify Firebase token (or dev header) before any socket event is handled.
+  io.use(async (socket, next) => {
+    try {
+      const { getAuth } = require('../config/firebase');
+      const isDevShortcut =
+        process.env.NODE_ENV === 'development' &&
+        process.env.DEV_AUTH === 'true';
 
-    // Client sends userId to join their personal room
-    socket.on('wa_init', async ({ userId }) => {
-      if (!userId) return;
-      socket.join(`user:${userId}`);
-      _logger.info({ userId }, '[WA] User joined room, initiating session');
+      if (isDevShortcut) {
+        // Dev mode: accept userId from handshake auth object
+        const devId = socket.handshake.auth?.userId || socket.handshake.headers['x-user-id'];
+        if (!devId) return next(new Error('x-user-id required in dev mode'));
+        socket.userId = devId.trim();
+        return next();
+      }
+
+      // Production: verify Firebase ID token sent in handshake auth
+      const token = socket.handshake.auth?.token;
+      if (!token) return next(new Error('Authentication token required'));
+
+      const firebaseAuth = getAuth();
+      if (!firebaseAuth) return next(new Error('Auth service not configured'));
+
+      const decoded  = await firebaseAuth.verifyIdToken(token);
+      socket.userId  = decoded.uid;
+      next();
+    } catch (err) {
+      next(new Error('Invalid or expired token'));
+    }
+  });
+
+  io.on('connection', (socket) => {
+    // userId is now guaranteed verified — do NOT trust any client-sent userId
+    const userId = socket.userId;
+    _logger.info({ socketId: socket.id, userId }, '[WA] Socket authenticated');
+
+    // Join the user's private room using verified identity only
+    socket.join(`user:${userId}`);
+
+    socket.on('wa_init', async () => {
+      // userId comes from verified socket context — client cannot override it
+      _logger.info({ userId }, '[WA] User initiated session');
       await createSession(userId);
     });
 
     socket.on('disconnect', () => {
-      _logger.info({ socketId: socket.id }, '[WA] Socket disconnected');
+      _logger.info({ socketId: socket.id, userId }, '[WA] Socket disconnected');
     });
   });
 }

@@ -13,21 +13,32 @@ const router = express.Router();
 router.use(requireAuth);
 
 /* ── GET /api/leads ──────────────────────────────────────────────── */
-// Cross-campaign lead search (optional utility)
+// Cross-campaign lead search — scoped strictly to the caller's own campaigns
 router.get('/', async (req, res, next) => {
   try {
     const { email, phone } = req.query;
     const db = getDb();
     if (!db) return res.json({ leads: [] });
 
-    // Firestore collection group query across all leads subcollections
-    let query = db.collectionGroup('leads');
-    if (email) query = query.where('email', '==', email);
-    if (phone) query = query.where('phone', '==', phone);
-    query = query.limit(50);
+    // First, fetch all campaign IDs that belong to this user
+    const campaignSnap = await db.collection('campaigns')
+      .where('userId', '==', req.userId)
+      .select() // fetch doc refs only — no field data needed
+      .get();
 
-    const snap  = await query.get();
-    const leads = snap.docs.map(doc => ({ leadId: doc.id, campaignId: doc.ref.parent.parent.id, ...doc.data() }));
+    if (campaignSnap.empty) return res.json({ leads: [] });
+
+    // Run per-campaign lead queries (collection-group would expose other tenants)
+    const leadPromises = campaignSnap.docs.map(async (campaignDoc) => {
+      let q = db.collection('campaigns').doc(campaignDoc.id).collection('leads');
+      if (email) q = q.where('email', '==', email);
+      if (phone) q = q.where('phone', '==', phone);
+      const snap = await q.limit(20).get();
+      return snap.docs.map(d => ({ leadId: d.id, campaignId: campaignDoc.id, ...d.data() }));
+    });
+
+    const nested = await Promise.all(leadPromises);
+    const leads  = nested.flat().slice(0, 200); // cap response size
     return res.json({ leads });
   } catch (err) {
     next(err);

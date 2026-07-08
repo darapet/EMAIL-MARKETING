@@ -24,9 +24,19 @@ const App = {
 // 2. SOCKET.IO INITIALISATION
 // ═══════════════════════════════════════════════════
 function initSocket() {
-  // Connect to backend server (adjust URL in production)
   const serverUrl = window.location.origin;
-  App.socket = io(serverUrl, { transports: ['websocket'] });
+
+  // In dev mode (DEV_AUTH=true on server), pass userId in handshake auth.
+  // In production, pass the Firebase ID token — server verifies it and
+  // derives userId server-side; the client never controls its own identity.
+  const authPayload = window.__firebaseIdToken
+    ? { token: window.__firebaseIdToken }         // production
+    : { userId: getCurrentUserId() };             // local dev only
+
+  App.socket = io(serverUrl, {
+    transports: ['websocket'],
+    auth: authPayload,
+  });
 
   App.socket.on('connect', () => {
     console.log('[WS] Connected:', App.socket.id);
@@ -522,7 +532,8 @@ async function exportLeads(format) {
 function generateQR() {
   if (!App.socket) { toast('Server connection not available', 'error'); return; }
   setWAStatus('connecting');
-  App.socket.emit('wa_init', { userId: getCurrentUserId() });
+  // No userId sent — server derives it from the verified socket token
+  App.socket.emit('wa_init');
   document.getElementById('qrPlaceholder').style.display = 'none';
   document.getElementById('qrImageWrap').style.display   = 'none';
   toast('Requesting QR code...', 'info');
