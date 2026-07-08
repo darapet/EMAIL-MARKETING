@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LeadForge — B2B Outreach Platform</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+  <!-- Socket.io CDN (connects to your backend server when deployed) -->
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+</head>
+<body>
+  <!-- ═══════════════════════════════════════════════
+       SIDEBAR NAVIGATION
+  ═══════════════════════════════════════════════ -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+          <rect width="32" height="32" rx="8" fill="url(#logoGrad)"/>
+          <path d="M8 10l8 6 8-6M8 10v12h16V10M8 22l6-5M24 22l-6-5" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <defs>
+            <linearGradient id="logoGrad" x1="0" y1="0" x2="32" y2="32">
+              <stop offset="0%" stop-color="#6366f1"/>
+              <stop offset="100%" stop-color="#8b5cf6"/>
+            </linearGradient>
+          </defs>
+        </svg>
+        <span class="logo-text">LeadForge</span>
+      </div>
+      <button class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle sidebar">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+      </button>
+    </div>
+
+    <nav class="nav-menu">
+      <div class="nav-section-label">Main</div>
+      <a href="#" class="nav-item active" data-page="dashboard">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+        <span>Dashboard</span>
+      </a>
+      <a href="#" class="nav-item" data-page="campaigns">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+        <span>Campaigns</span>
+        <span class="nav-badge" id="campaignBadge">0</span>
+      </a>
+      <a href="#" class="nav-item" data-page="scraper">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M11 8v6M8 11h6"/></svg>
+        <span>Lead Scraper</span>
+      </a>
+      <a href="#" class="nav-item" data-page="leads">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span>Leads</span>
+        <span class="nav-badge" id="leadsBadge">0</span>
+      </a>
+
+      <div class="nav-section-label">Outreach</div>
+      <a href="#" class="nav-item" data-page="whatsapp">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        <span>WhatsApp</span>
+        <span class="nav-status" id="waStatus">●</span>
+      </a>
+      <a href="#" class="nav-item" data-page="outreach">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/></svg>
+        <span>Send Outreach</span>
+      </a>
+      <a href="#" class="nav-item" data-page="analytics">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        <span>Analytics</span>
+      </a>
+
+      <div class="nav-section-label">Account</div>
+      <a href="#" class="nav-item" data-page="settings">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span>Settings</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="user-pill">
+        <div class="avatar" id="userAvatar">U</div>
+        <div class="user-info">
+          <span class="user-name" id="userName">User</span>
+          <span class="user-plan">Pro Plan</span>
+        </div>
+        <button class="logout-btn" id="logoutBtn" title="Sign out">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16,17 21,12 16,7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ═══════════════════════════════════════════════
+       MAIN CONTENT AREA
+  ═══════════════════════════════════════════════ -->
+  <main class="main-content" id="mainContent">
+
+    <!-- TOP BAR -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <h1 class="page-title" id="pageTitle">Dashboard</h1>
+        <span class="breadcrumb" id="breadcrumb">Overview</span>
+      </div>
+      <div class="topbar-right">
+        <div class="search-wrap">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+          <input type="text" class="search-input" placeholder="Search leads, campaigns..." />
+        </div>
+        <button class="icon-btn" id="notifBtn" aria-label="Notifications">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span class="notif-dot"></span>
+        </button>
+      </div>
+    </header>
+
+    <!-- ════════════════════════════════════════════
+         PAGE: DASHBOARD
+    ════════════════════════════════════════════ -->
+    <section class="page active" id="page-dashboard">
+      <div class="stats-grid">
+        <div class="stat-card accent-indigo">
+          <div class="stat-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </div>
+          <div class="stat-body">
+            <div class="stat-value" id="statTotalLeads">0</div>
+            <div class="stat-label">Total Leads</div>
+            <div class="stat-delta positive">+0 this week</div>
+          </div>
+        </div>
+        <div class="stat-card accent-emerald">
+          <div class="stat-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg>
+          </div>
+          <div class="stat-body">
+            <div class="stat-value" id="statEmailsSent">0</div>
+            <div class="stat-label">Emails Sent</div>
+            <div class="stat-delta positive">+0 today</div>
+          </div>
+        </div>
+        <div class="stat-card accent-green">
+          <div class="stat-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+          </div>
+          <div class="stat-body">
+            <div class="stat-value" id="statWaSent">0</div>
+            <div class="stat-label">WA Messages</div>
+            <div class="stat-delta neutral">+0 today</div>
+          </div>
+        </div>
+        <div class="stat-card accent-amber">
+          <div class="stat-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+          </div>
+          <div class="stat-body">
+            <div class="stat-value" id="statCampaigns">0</div>
+            <div class="stat-label">Campaigns</div>
+            <div class="stat-delta neutral">0 running</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="dashboard-grid">
+        <!-- Recent Activity -->
+        <div class="card activity-card">
+          <div class="card-header">
+            <h2>Recent Activity</h2>
+            <button class="btn-ghost btn-sm">View All</button>
+          </div>
+          <div class="activity-list" id="activityList">
+            <div class="activity-empty">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+              <p>No recent activity. Start a campaign to see activity here.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="card quick-actions-card">
+          <div class="card-header">
+            <h2>Quick Actions</h2>
+          </div>
+          <div class="quick-actions">
+            <button class="quick-action-btn" data-goto="scraper">
+              <div class="qa-icon qa-indigo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+              </div>
+              <div class="qa-text">
+                <strong>New Scrape</strong>
+                <span>Start a lead scraping campaign</span>
+              </div>
+              <svg class="qa-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
+            </button>
+            <button class="quick-action-btn" data-goto="whatsapp">
+              <div class="qa-icon qa-green">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+              </div>
+              <div class="qa-text">
+                <strong>Connect WhatsApp</strong>
+                <span>Scan QR to link your number</span>
+              </div>
+              <svg class="qa-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
+            </button>
+            <button class="quick-action-btn" data-goto="outreach">
+              <div class="qa-icon qa-amber">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/></svg>
+              </div>
+              <div class="qa-text">
+                <strong>Send Outreach</strong>
+                <span>Email or WhatsApp your leads</span>
+              </div>
+              <svg class="qa-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9,18 15,12 9,6"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Campaign Progress -->
+        <div class="card progress-card">
+          <div class="card-header">
+            <h2>Active Campaigns</h2>
+            <button class="btn-ghost btn-sm" data-goto="campaigns">See all</button>
+          </div>
+          <div class="progress-list" id="activeCampaignsList">
+            <div class="empty-state-sm">No active campaigns</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════════════════════════════
+         PAGE: LEAD SCRAPER WIZARD
+    ════════════════════════════════════════════ -->
+    <section class="page" id="page-scraper">
+      <div class="wizard-container">
+        <div class="wizard-steps" id="wizardSteps">
+          <div class="step active" data-step="1"><span class="step-num">1</span><span class="step-label">Channels</span></div>
+          <div class="step-line"></div>
+          <div class="step" data-step="2"><span class="step-num">2</span><span class="step-label">Niche</span></div>
+          <div class="step-line"></div>
+          <div class="step" data-step="3"><span class="step-num">3</span><span class="step-label">Location</span></div>
+          <div class="step-line"></div>
+          <div class="step" data-step="4"><span class="step-num">4</span><span class="step-label">Launch</span></div>
+        </div>
+
+        <!-- STEP 1: CHANNEL SELECTION -->
+        <div class="wizard-panel active" id="wizard-step-1">
+          <div class="card">
+            <div class="card-header">
+              <h2>Select Extraction Targets</h2>
+              <p class="card-subtitle">Choose which contact channels to scrape per lead</p>
+            </div>
+            <div class="channel-grid">
+              <label class="channel-checkbox checked" data-channel="email">
+                <input type="checkbox" name="channel" value="email" checked />
+                <div class="channel-icon ch-email">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                </div>
+                <span>Email</span>
+                <div class="check-mark">✓</div>
+              </label>
+              <label class="channel-checkbox checked" data-channel="whatsapp">
+                <input type="checkbox" name="channel" value="whatsapp" checked />
+                <div class="channel-icon ch-whatsapp">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                </div>
+                <span>WhatsApp</span>
+                <div class="check-mark">✓</div>
+              </label>
+              <label class="channel-checkbox" data-channel="facebook">
+                <input type="checkbox" name="channel" value="facebook" />
+                <div class="channel-icon ch-facebook">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
+                </div>
+                <span>Facebook</span>
+                <div class="check-mark">✓</div>
+              </label>
+              <label class="channel-checkbox" data-channel="instagram">
+                <input type="checkbox" name="channel" value="instagram" />
+                <div class="channel-icon ch-instagram">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+                </div>
+                <span>Instagram</span>
+                <div class="check-mark">✓</div>
+              </label>
+              <label class="channel-checkbox" data-channel="tiktok">
+                <input type="checkbox" name="channel" value="tiktok" />
+                <div class="channel-icon ch-tiktok">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.28 6.28 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.82a8.22 8.22 0 0 0 4.83 1.55V6.89a4.85 4.85 0 0 1-1.06-.2z"/></svg>
+                </div>
+                <span>TikTok</span>
+                <div class="check-mark">✓</div>
+              </label>
+              <label class="channel-checkbox" data-channel="twitter">
+                <input type="checkbox" name="channel" value="twitter" />
+                <div class="channel-icon ch-twitter">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                </div>
+                <span>X / Twitter</span>
+                <div class="check-mark">✓</div>
+              </label>
+              <label class="channel-checkbox" data-channel="linkedin">
+                <input type="checkbox" name="channel" value="linkedin" />
+                <div class="channel-icon ch-linkedin">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6zM2 9h4v12H2z"/><circle cx="4" cy="4" r="2"/></svg>
+                </div>
+                <span>LinkedIn</span>
+                <div class="check-mark">✓</div>
+              </label>
+              <label class="channel-checkbox" data-channel="youtube">
+                <input type="checkbox" name="channel" value="youtube" />
+                <div class="channel-icon ch-youtube">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-1.96C18.88 4 12 4 12 4s-6.88 0-8.6.46A2.78 2.78 0 0 0 1.46 6.42 29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58A2.78 2.78 0 0 0 3.4 19.54C5.12 20 12 20 12 20s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-1.96A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z"/><polygon points="9.75,15.02 15.5,12 9.75,8.98 9.75,15.02" fill="white"/></svg>
+                </div>
+                <span>YouTube</span>
+                <div class="check-mark">✓</div>
+              </label>
+              <label class="channel-checkbox" data-channel="telegram">
+                <input type="checkbox" name="channel" value="telegram" />
+                <div class="channel-icon ch-telegram">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+                </div>
+                <span>Telegram</span>
+                <div class="check-mark">✓</div>
+              </label>
+              <label class="channel-checkbox" data-channel="pinterest">
+                <input type="checkbox" name="channel" value="pinterest" />
+                <div class="channel-icon ch-pinterest">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0a12 12 0 0 0-4.373 23.178c-.041-.937-.008-2.063.233-3.083l1.713-7.255s-.437-.875-.437-2.168c0-2.033 1.179-3.551 2.645-3.551 1.248 0 1.852.937 1.852 2.059 0 1.252-.799 3.131-1.214 4.871-.344 1.456.729 2.641 2.163 2.641 2.596 0 4.344-3.35 4.344-7.306 0-3.008-2.022-5.252-5.673-5.252-4.133 0-6.722 3.085-6.722 6.527 0 1.188.351 2.023.899 2.668.254.298.29.419.197.759l-.307 1.195c-.1.386-.327.469-.755.282-1.882-.773-2.756-2.848-2.756-5.176 0-3.852 3.24-8.473 9.65-8.473 5.162 0 8.565 3.74 8.565 7.758 0 5.318-2.949 9.294-7.292 9.294-1.463 0-2.838-.789-3.31-1.673l-.917 3.567c-.291 1.048-.959 2.103-1.555 2.923.882.256 1.818.393 2.786.393A12 12 0 0 0 12 0z"/></svg>
+                </div>
+                <span>Pinterest</span>
+                <div class="check-mark">✓</div>
+              </label>
+              <label class="channel-checkbox" data-channel="snapchat">
+                <input type="checkbox" name="channel" value="snapchat" />
+                <div class="channel-icon ch-snapchat">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.166 3.003c.186 0 1.982.063 3.063 1.835.388.627.388 1.7.388 1.7l.014 3.18s1.363.756 2.436.756c.21 0 .327.104.327.312 0 .568-1.31 1.118-2.2 1.361.133.512.404 1.362 1.264 2.18.45.428 1.065.81 1.945 1.024.02.005.03.022.027.042-.009.063-.084.168-.274.218-.398.1-.8.133-1.213.133-.232 0-.506-.016-.737-.063-.358.68-1.072 1.09-2.061 1.09-.508 0-1.072-.13-1.73-.428a4.68 4.68 0 0 0-1.888-.4c-.675 0-1.305.129-1.888.4-.658.297-1.222.428-1.73.428-.988 0-1.702-.41-2.061-1.09a7.44 7.44 0 0 1-.737.063c-.413 0-.815-.033-1.213-.133-.19-.05-.265-.155-.274-.218a.041.041 0 0 1 .027-.042c.88-.214 1.495-.596 1.945-1.024.86-.818 1.131-1.668 1.264-2.18-.89-.243-2.2-.793-2.2-1.361 0-.208.118-.312.327-.312 1.073 0 2.436-.756 2.436-.756l.014-3.18s0-1.073.388-1.7C9.985 3.066 11.98 3.003 12.166 3.003z"/></svg>
+                </div>
+                <span>Snapchat</span>
+                <div class="check-mark">✓</div>
+              </label>
+              <label class="channel-checkbox" data-channel="website">
+                <input type="checkbox" name="channel" value="website" checked />
+                <div class="channel-icon ch-website">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                </div>
+                <span>Website</span>
+                <div class="check-mark">✓</div>
+              </label>
+            </div>
+            <div class="selected-channels-summary" id="channelSummary">
+              <span>Selected: <strong id="channelCount">3</strong> channels</span>
+            </div>
+          </div>
+          <div class="wizard-nav">
+            <div></div>
+            <button class="btn btn-primary" onclick="wizardNext()">Next: Set Niche →</button>
+          </div>
+        </div>
+
+        <!-- STEP 2: NICHE -->
+        <div class="wizard-panel" id="wizard-step-2">
+          <div class="card">
+            <div class="card-header">
+              <h2>Define Your Target Niche</h2>
+              <p class="card-subtitle">Enter the industry or business type you want to target</p>
+            </div>
+            <div class="niche-section">
+              <div class="form-group">
+                <label class="form-label">Industry / Niche</label>
+                <input type="text" id="nicheInput" class="form-input" placeholder="e.g. Restaurant, Dental Clinic, Boutique Hotel, Law Firm..." />
+                <p class="form-hint">Be specific — the more targeted, the better your lead quality.</p>
+              </div>
+              <div class="niche-tags-label">Quick select:</div>
+              <div class="niche-tags">
+                <button class="niche-tag" onclick="setNiche('Restaurant')">Restaurant</button>
+                <button class="niche-tag" onclick="setNiche('Real Estate Agency')">Real Estate</button>
+                <button class="niche-tag" onclick="setNiche('Dental Clinic')">Dental</button>
+                <button class="niche-tag" onclick="setNiche('Law Firm')">Law Firm</button>
+                <button class="niche-tag" onclick="setNiche('Gym & Fitness')">Gym & Fitness</button>
+                <button class="niche-tag" onclick="setNiche('Ecommerce Store')">Ecommerce</button>
+                <button class="niche-tag" onclick="setNiche('Beauty Salon')">Beauty Salon</button>
+                <button class="niche-tag" onclick="setNiche('Digital Marketing Agency')">Marketing Agency</button>
+                <button class="niche-tag" onclick="setNiche('Accounting Firm')">Accounting</button>
+                <button class="niche-tag" onclick="setNiche('Logistics Company')">Logistics</button>
+              </div>
+              <div class="form-group mt-4">
+                <label class="form-label">Scrape Depth</label>
+                <div class="range-wrap">
+                  <input type="range" id="scrapeDepth" min="1" max="5" value="2" class="range-input" oninput="document.getElementById('scrapeDepthVal').textContent = this.value" />
+                  <span class="range-value" id="scrapeDepthVal">2</span>
+                </div>
+                <p class="form-hint">Higher depth = more results, slower scrape.</p>
+              </div>
+            </div>
+          </div>
+          <div class="wizard-nav">
+            <button class="btn btn-ghost" onclick="wizardPrev()">← Back</button>
+            <button class="btn btn-primary" onclick="wizardNext()">Next: Location →</button>
+          </div>
+        </div>
+
+        <!-- STEP 3: LOCATION -->
+        <div class="wizard-panel" id="wizard-step-3">
+          <div class="card">
+            <div class="card-header">
+              <h2>Geographic Target</h2>
+              <p class="card-subtitle">Select countries and drill down to states/regions</p>
+            </div>
+            <div class="location-search-wrap">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+              <input type="text" id="countrySearch" class="location-search" placeholder="Search country..." oninput="filterCountries(this.value)" />
+            </div>
+            <div class="countries-grid" id="countriesGrid">
+              <!-- Populated by JS -->
+            </div>
+            <div class="selected-regions" id="selectedRegions"></div>
+          </div>
+          <div class="wizard-nav">
+            <button class="btn btn-ghost" onclick="wizardPrev()">← Back</button>
+            <button class="btn btn-primary" onclick="wizardNext()">Next: Review →</button>
+          </div>
+        </div>
+
+        <!-- STEP 4: LAUNCH -->
+        <div class="wizard-panel" id="wizard-step-4">
+          <div class="card">
+            <div class="card-header">
+              <h2>Campaign Summary</h2>
+              <p class="card-subtitle">Review your settings before launching the scrape</p>
+            </div>
+            <div class="summary-grid" id="campaignSummary">
+              <!-- Populated by JS -->
+            </div>
+            <div class="form-group mt-4">
+              <label class="form-label">Campaign Name (auto-generated, editable)</label>
+              <input type="text" id="campaignName" class="form-input" placeholder="My Campaign" />
+            </div>
+          </div>
+          <div class="wizard-nav">
+            <button class="btn btn-ghost" onclick="wizardPrev()">← Back</button>
+            <button class="btn btn-primary btn-launch" id="launchBtn" onclick="launchCampaign()">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5,3 19,12 5,21 5,3"/></svg>
+              Launch Scrape
+            </button>
+          </div>
+
+          <!-- Scraping progress -->
+          <div class="scrape-progress" id="scrapeProgress" style="display:none">
+            <div class="progress-header">
+              <div class="progress-pulse"></div>
+              <span id="scrapeStatusText">Initializing scraper...</span>
+            </div>
+            <div class="progress-bar-wrap">
+              <div class="progress-bar" id="scrapeProgressBar" style="width:0%"></div>
+            </div>
+            <div class="progress-stats">
+              <span>Found: <strong id="foundCount">0</strong> leads</span>
+              <span>Processed: <strong id="processedCount">0</strong> URLs</span>
+              <span>Verified WA: <strong id="waVerifiedCount">0</strong></span>
+            </div>
+            <div class="live-log" id="scrapeLog"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════════════════════════════
+         PAGE: CAMPAIGNS
+    ════════════════════════════════════════════ -->
+    <section class="page" id="page-campaigns">
+      <div class="page-toolbar">
+        <div class="toolbar-left">
+          <input type="text" class="search-input" placeholder="Search campaigns..." id="campaignSearchInput" oninput="filterCampaigns(this.value)" />
+        </div>
+        <div class="toolbar-right">
+          <button class="btn btn-primary" data-goto="scraper">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New Campaign
+          </button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table class="data-table" id="campaignsTable">
+            <thead>
+              <tr>
+                <th>Campaign ID</th>
+                <th>Niche</th>
+                <th>Location</th>
+                <th>Channels</th>
+                <th>Leads</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="campaignsBody">
+              <tr class="empty-row">
+                <td colspan="8">
+                  <div class="table-empty">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+                    <p>No campaigns yet. <a href="#" data-goto="scraper">Start your first scrape →</a></p>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════════════════════════════
+         PAGE: LEADS
+    ════════════════════════════════════════════ -->
+    <section class="page" id="page-leads">
+      <div class="page-toolbar">
+        <div class="toolbar-left">
+          <select class="form-select" id="leadsCampaignFilter" onchange="loadLeadsForCampaign(this.value)">
+            <option value="">Select campaign...</option>
+          </select>
+          <select class="form-select" id="leadsStatusFilter" onchange="filterLeads()">
+            <option value="">All Statuses</option>
+            <option value="verified">Verified</option>
+            <option value="pending">Pending</option>
+            <option value="optout">Opted Out</option>
+          </select>
+          <input type="text" class="search-input" placeholder="Search leads..." id="leadsSearch" oninput="filterLeads()" />
+        </div>
+        <div class="toolbar-right">
+          <button class="btn btn-ghost" onclick="exportLeads('csv')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Export CSV
+          </button>
+          <button class="btn btn-primary" id="bulkOutreachBtn" onclick="bulkOutreach()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/></svg>
+            Bulk Outreach
+          </button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table class="data-table" id="leadsTable">
+            <thead>
+              <tr>
+                <th><input type="checkbox" id="selectAllLeads" onchange="toggleSelectAll(this)" /></th>
+                <th>Business Name</th>
+                <th>Email</th>
+                <th>WhatsApp</th>
+                <th>Social Links</th>
+                <th>WA Verified</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="leadsBody">
+              <tr class="empty-row">
+                <td colspan="8">
+                  <div class="table-empty">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                    <p>Select a campaign above to view its leads.</p>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════════════════════════════
+         PAGE: WHATSAPP SESSION MANAGER
+    ════════════════════════════════════════════ -->
+    <section class="page" id="page-whatsapp">
+      <div class="whatsapp-layout">
+        <!-- Left: QR Login Panel -->
+        <div class="card wa-login-card">
+          <div class="card-header">
+            <h2>WhatsApp Session</h2>
+            <div class="wa-status-badge" id="waStatusBadge">
+              <span class="status-dot disconnected"></span>
+              <span id="waStatusText">Disconnected</span>
+            </div>
+          </div>
+
+          <div class="qr-section" id="qrSection">
+            <div class="qr-placeholder" id="qrPlaceholder">
+              <div class="qr-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <rect x="2" y="2" width="8" height="8" rx="1"/><rect x="14" y="2" width="8" height="8" rx="1"/>
+                  <rect x="2" y="14" width="8" height="8" rx="1"/>
+                  <path d="M14 14h2v2h-2zM18 14h2v2h-2zM14 18h2v2h-2zM18 18h2v2h-2z"/>
+                </svg>
+              </div>
+              <p>Click "Generate QR Code" to begin</p>
+            </div>
+            <div class="qr-image-wrap" id="qrImageWrap" style="display:none">
+              <img id="qrImage" src="" alt="WhatsApp QR Code" />
+              <div class="qr-countdown">Expires in <strong id="qrTimer">60</strong>s</div>
+            </div>
+            <div class="wa-connected-state" id="waConnectedState" style="display:none">
+              <div class="connected-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20,6 9,17 4,12"/></svg>
+              </div>
+              <div class="connected-info">
+                <strong id="waConnectedName">Connected</strong>
+                <span id="waConnectedPhone"></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="wa-actions">
+            <button class="btn btn-primary btn-full" id="generateQrBtn" onclick="generateQR()">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="8" height="8" rx="1"/><rect x="14" y="2" width="8" height="8" rx="1"/><rect x="2" y="14" width="8" height="8" rx="1"/></svg>
+              Generate QR Code
+            </button>
+            <button class="btn btn-danger btn-full" id="disconnectWaBtn" onclick="disconnectWA()" style="display:none">
+              Disconnect Session
+            </button>
+          </div>
+        </div>
+
+        <!-- Right: Broadcast Panel -->
+        <div class="card wa-broadcast-card">
+          <div class="card-header">
+            <h2>WhatsApp Broadcast</h2>
+          </div>
+
+          <div class="broadcast-source-toggle">
+            <label class="toggle-label">Target Audience</label>
+            <div class="toggle-group">
+              <button class="toggle-btn active" id="toggleCampaign" onclick="setBroadcastSource('campaign')">Campaign Leads</button>
+              <button class="toggle-btn" id="toggleContacts" onclick="setBroadcastSource('contacts')">My Contacts</button>
+            </div>
+          </div>
+
+          <div class="form-group" id="broadcastCampaignWrap">
+            <label class="form-label">Select Campaign</label>
+            <select class="form-select" id="broadcastCampaignSelect">
+              <option value="">Choose campaign...</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Message Template</label>
+            <textarea class="form-textarea" id="waMessage" rows="6" placeholder="Hi {businessName}, I saw your listing and wanted to reach out...
+
+{proposal}
+
+Reply 'STOP' to opt out."></textarea>
+            <div class="template-vars">
+              <span class="template-var" onclick="insertVar('{businessName}')">+ businessName</span>
+              <span class="template-var" onclick="insertVar('{niche}')">+ niche</span>
+              <span class="template-var" onclick="insertVar('{proposal}')">+ proposal</span>
+              <span class="template-var" onclick="insertVar('{yourName}')">+ yourName</span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Anti-Ban Delay (seconds per message)</label>
+            <div class="delay-range">
+              <div class="range-row">
+                <label>Min: <strong id="minDelayVal">60</strong>s</label>
+                <input type="range" min="10" max="300" value="60" class="range-input" oninput="document.getElementById('minDelayVal').textContent = this.value" />
+              </div>
+              <div class="range-row">
+                <label>Max: <strong id="maxDelayVal">180</strong>s</label>
+                <input type="range" min="10" max="300" value="180" class="range-input" oninput="document.getElementById('maxDelayVal').textContent = this.value" />
+              </div>
+            </div>
+          </div>
+
+          <button class="btn btn-primary btn-full" onclick="startWABroadcast()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5,3 19,12 5,21 5,3"/></svg>
+            Start Broadcast
+          </button>
+
+          <div class="broadcast-log" id="broadcastLog"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════════════════════════════
+         PAGE: EMAIL OUTREACH
+    ════════════════════════════════════════════ -->
+    <section class="page" id="page-outreach">
+      <div class="outreach-layout">
+        <!-- Email Composer -->
+        <div class="card email-composer-card">
+          <div class="card-header">
+            <h2>Email Outreach</h2>
+            <div class="provider-badge">via Brevo SMTP</div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Campaign Target</label>
+            <select class="form-select" id="emailCampaignSelect">
+              <option value="">Choose campaign...</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Subject Line</label>
+            <input type="text" class="form-input" id="emailSubject" placeholder="Partnership Opportunity — {businessName}" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">AI Proposal Body</label>
+            <textarea class="form-textarea" id="emailBody" rows="10" placeholder="Enter your outreach message here. Use {businessName}, {niche}, {yourName}, {yourCompany} as merge fields.
+
+Example:
+Hi {businessName} team,
+
+I specialize in helping {niche} businesses scale their revenue through targeted digital marketing..."></textarea>
+            <div class="template-vars">
+              <span class="template-var" onclick="insertEmailVar('{businessName}')">+ businessName</span>
+              <span class="template-var" onclick="insertEmailVar('{niche}')">+ niche</span>
+              <span class="template-var" onclick="insertEmailVar('{yourName}')">+ yourName</span>
+              <span class="template-var" onclick="insertEmailVar('{yourCompany}')">+ yourCompany</span>
+            </div>
+          </div>
+
+          <div class="email-options">
+            <label class="checkbox-label">
+              <input type="checkbox" id="includeLogo" checked />
+              <span>Include company logo</span>
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="includePhone" checked />
+              <span>Include phone number</span>
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="includeOptOut" checked disabled />
+              <span>Include opt-out footer (required)</span>
+            </label>
+          </div>
+
+          <div class="btn-row">
+            <button class="btn btn-ghost" onclick="previewEmail()">Preview HTML</button>
+            <button class="btn btn-ghost" onclick="sendTestEmail()">Send Test</button>
+            <button class="btn btn-primary" onclick="startEmailCampaign()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/></svg>
+              Send to All Leads
+            </button>
+          </div>
+        </div>
+
+        <!-- Email Preview -->
+        <div class="card email-preview-card">
+          <div class="card-header">
+            <h2>Email Preview</h2>
+            <div class="preview-device-toggle">
+              <button class="preview-btn active" onclick="setPreviewMode('desktop')">Desktop</button>
+              <button class="preview-btn" onclick="setPreviewMode('mobile')">Mobile</button>
+            </div>
+          </div>
+          <div class="email-preview-frame" id="emailPreviewFrame">
+            <div class="preview-placeholder">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+              <p>Your email preview will appear here</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════════════════════════════
+         PAGE: ANALYTICS
+    ════════════════════════════════════════════ -->
+    <section class="page" id="page-analytics">
+      <div class="analytics-grid">
+        <div class="card chart-card">
+          <div class="card-header"><h2>Emails Sent (Last 30 Days)</h2></div>
+          <div class="chart-placeholder">
+            <canvas id="emailChart"></canvas>
+          </div>
+        </div>
+        <div class="card chart-card">
+          <div class="card-header"><h2>WhatsApp Messages</h2></div>
+          <div class="chart-placeholder">
+            <canvas id="waChart"></canvas>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h2>Opt-Out Rate</h2></div>
+          <div class="optout-stat">
+            <div class="big-stat" id="optoutRate">0%</div>
+            <p>of all recipients opted out</p>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h2>Reply Rate</h2></div>
+          <div class="optout-stat">
+            <div class="big-stat accent-emerald-text" id="replyRate">0%</div>
+            <p>of leads replied to outreach</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════════════════════════════
+         PAGE: SETTINGS
+    ════════════════════════════════════════════ -->
+    <section class="page" id="page-settings">
+      <div class="settings-layout">
+        <nav class="settings-nav">
+          <button class="settings-nav-item active" data-settings-tab="profile">Profile</button>
+          <button class="settings-nav-item" data-settings-tab="branding">Branding</button>
+          <button class="settings-nav-item" data-settings-tab="apikeys">API Keys</button>
+          <button class="settings-nav-item" data-settings-tab="notifications">Notifications</button>
+        </nav>
+
+        <div class="settings-content">
+          <!-- Profile -->
+          <div class="settings-tab active" id="settings-profile">
+            <div class="card">
+              <div class="card-header"><h2>Profile</h2></div>
+              <div class="settings-form">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Full Name</label>
+                    <input type="text" class="form-input" id="profileName" placeholder="John Doe" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Email Address</label>
+                    <input type="email" class="form-input" id="profileEmail" placeholder="john@company.com" />
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Company Name</label>
+                    <input type="text" class="form-input" id="profileCompany" placeholder="Acme Corp" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Business Phone</label>
+                    <input type="tel" class="form-input" id="profilePhone" placeholder="+1 555 000 0000" />
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Company Description (used in email templates)</label>
+                  <textarea class="form-textarea" id="profileDesc" rows="3" placeholder="We help businesses grow through..."></textarea>
+                </div>
+                <button class="btn btn-primary" onclick="saveProfile()">Save Profile</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Branding -->
+          <div class="settings-tab" id="settings-branding">
+            <div class="card">
+              <div class="card-header"><h2>Brand Identity</h2></div>
+              <div class="settings-form">
+                <div class="form-group">
+                  <label class="form-label">Logo URL</label>
+                  <div class="logo-upload-row">
+                    <input type="url" class="form-input" id="brandLogoUrl" placeholder="https://yoursite.com/logo.png" oninput="previewLogo(this.value)" />
+                    <div class="logo-preview" id="logoPreview">
+                      <span>Preview</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Brand Color</label>
+                  <div class="color-pick-row">
+                    <input type="color" class="color-input" id="brandColor" value="#6366f1" />
+                    <input type="text" class="form-input form-input-sm" id="brandColorHex" value="#6366f1" />
+                  </div>
+                </div>
+                <button class="btn btn-primary" onclick="saveBranding()">Save Branding</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- API Keys -->
+          <div class="settings-tab" id="settings-apikeys">
+            <div class="card">
+              <div class="card-header"><h2>API Credentials</h2></div>
+              <div class="settings-form">
+                <div class="form-group">
+                  <label class="form-label">Brevo API Key</label>
+                  <div class="secret-input-wrap">
+                    <input type="password" class="form-input" id="brevoApiKey" placeholder="xkeysib-..." />
+                    <button class="toggle-visibility" onclick="toggleVisibility('brevoApiKey')">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </button>
+                  </div>
+                  <p class="form-hint">Used for transactional email delivery. Get yours at <a href="https://brevo.com" target="_blank">brevo.com</a></p>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Firebase Config (auto-populated)</label>
+                  <textarea class="form-textarea code-textarea" id="firebaseConfig" rows="6" placeholder='{"apiKey": "...", "projectId": "..."}'></textarea>
+                </div>
+                <button class="btn btn-primary" onclick="saveApiKeys()">Save Keys</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Notifications -->
+          <div class="settings-tab" id="settings-notifications">
+            <div class="card">
+              <div class="card-header"><h2>Notification Preferences</h2></div>
+              <div class="settings-form">
+                <div class="toggle-setting">
+                  <div>
+                    <strong>New lead found</strong>
+                    <p>Alert when scraper finds a new lead</p>
+                  </div>
+                  <label class="switch"><input type="checkbox" id="notifNewLead" checked /><span class="slider"></span></label>
+                </div>
+                <div class="toggle-setting">
+                  <div>
+                    <strong>Opt-out received</strong>
+                    <p>Alert when a lead sends STOP</p>
+                  </div>
+                  <label class="switch"><input type="checkbox" id="notifOptOut" checked /><span class="slider"></span></label>
+                </div>
+                <div class="toggle-setting">
+                  <div>
+                    <strong>Campaign complete</strong>
+                    <p>Alert when scrape finishes</p>
+                  </div>
+                  <label class="switch"><input type="checkbox" id="notifCampaignDone" checked /><span class="slider"></span></label>
+                </div>
+                <div class="toggle-setting">
+                  <div>
+                    <strong>WA session expiry</strong>
+                    <p>Alert when QR expires or session drops</p>
+                  </div>
+                  <label class="switch"><input type="checkbox" id="notifWaExpiry" checked /><span class="slider"></span></label>
+                </div>
+                <button class="btn btn-primary" onclick="saveNotifications()">Save Preferences</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ── EMAIL PREVIEW MODAL ─────────────────────── -->
+  <div class="modal-overlay" id="emailPreviewModal">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h3>Email Preview</h3>
+        <button class="modal-close" onclick="closeModal('emailPreviewModal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <iframe id="emailPreviewIframe" class="email-iframe" srcdoc=""></iframe>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── LEAD DETAIL MODAL ───────────────────────── -->
+  <div class="modal-overlay" id="leadDetailModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Lead Details</h3>
+        <button class="modal-close" onclick="closeModal('leadDetailModal')">✕</button>
+      </div>
+      <div class="modal-body" id="leadDetailBody"></div>
+    </div>
+  </div>
+
+  <!-- ── TOAST CONTAINER ────────────────────────── -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="js/locations.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
