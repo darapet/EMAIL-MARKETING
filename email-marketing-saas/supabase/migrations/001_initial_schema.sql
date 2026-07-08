@@ -207,18 +207,24 @@ CREATE POLICY "Service role wa_sessions"    ON public.whatsapp_sessions USING (t
 -- FUNCTION: auto-create profile on auth signup
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $
+DECLARE
+  admin_email TEXT := 'daramolapeter98@gmail.com';
 BEGIN
-  INSERT INTO public.profiles (id, email, name)
+  INSERT INTO public.profiles (id, email, name, is_admin, plan)
   VALUES (
     NEW.id,
     NEW.email,
-    COALESCE(NEW.raw_user_meta_data->>'name', split_part(NEW.email, '@', 1))
+    COALESCE(NEW.raw_user_meta_data->>'name', split_part(NEW.email, '@', 1)),
+    (NEW.email = admin_email),
+    CASE WHEN NEW.email = admin_email THEN 'premium' ELSE 'free' END
   )
-  ON CONFLICT (id) DO NOTHING;
+  ON CONFLICT (id) DO UPDATE
+    SET is_admin = (NEW.email = admin_email),
+        plan     = CASE WHEN NEW.email = admin_email THEN 'premium' ELSE profiles.plan END;
   RETURN NEW;
 END;
-$$;
+$;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
