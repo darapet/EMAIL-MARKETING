@@ -99,6 +99,7 @@ function navigateTo(page) {
     settings:  ['Settings', 'Account & configuration'],
     templates: ['Email Templates', 'Manage reusable email templates'],
     admin:     ['Admin Panel', 'Platform management'],
+    automation:['Automation', 'Schedule email & WhatsApp sends'],
   };
   if (titles[page]) {
     document.getElementById('pageTitle').textContent    = titles[page][0];
@@ -114,6 +115,7 @@ function navigateTo(page) {
   if (page === 'whatsapp')  populateBroadcastCampaignSelect();
   if (page === 'templates') { if (typeof loadTemplates === 'function') loadTemplates(); }
   if (page === 'admin')     { if (typeof loadAdminDashboard === 'function') loadAdminDashboard(); }
+  if (page === 'automation') { if (typeof loadScheduledSends === 'function') loadScheduledSends(); if (typeof loadCampaignsForSchedule === 'function') loadCampaignsForSchedule(); }
 
   // Show premium gate on API keys settings if not premium
   if (page === 'settings') {
@@ -185,11 +187,26 @@ function setNiche(name) {
 }
 
 // ─── Countries ───────────────────────────────────
+
+function selectAllCountries() {
+  const allSelected = COUNTRIES.length === App.selectedCountries.length;
+  if (allSelected) {
+    App.selectedCountries = [];
+  } else {
+    App.selectedCountries = COUNTRIES.map(c => ({ ...c, selectedStates: [] }));
+  }
+  renderCountries(COUNTRIES);
+  renderSelectedRegions();
+  const btn = document.getElementById('selectAllCountriesBtn');
+  if (btn) btn.textContent = allSelected ? 'Select All' : 'Deselect All';
+}
+
 function renderCountries(list) {
   const grid = document.getElementById('countriesGrid');
   grid.innerHTML = list.map(c => `
     <div class="country-item${App.selectedCountries.find(s => s.code === c.code) ? ' selected' : ''}"
          onclick="toggleCountry('${c.code}', '${c.name}', '${c.flag}')">
+      <span class="country-cb"><span class="country-cb-tick">✓</span></span>
       <span class="country-flag">${c.flag}</span>
       <span class="country-name">${c.name}</span>
     </div>
@@ -201,6 +218,13 @@ function filterCountries(q) {
     ? COUNTRIES.filter(c => c.name.toLowerCase().includes(q.toLowerCase()))
     : COUNTRIES;
   renderCountries(filtered);
+}
+
+function updateSelectedCountryCount() {
+  const el = document.getElementById('selectedCountryCount');
+  if (el) el.textContent = App.selectedCountries.length + ' selected';
+  const btn = document.getElementById('selectAllCountriesBtn');
+  if (btn) btn.textContent = App.selectedCountries.length === COUNTRIES.length ? 'Deselect All' : 'Select All Countries';
 }
 
 function toggleCountry(code, name, flag) {
@@ -824,6 +848,8 @@ document.querySelectorAll('.settings-nav-item').forEach(btn => {
     btn.classList.add('active');
     const tab = document.getElementById(`settings-${btn.dataset.settingsTab}`);
     if (tab) tab.classList.add('active');
+    // Load brevo slots when opening API keys tab
+    if (btn.dataset.settingsTab === 'apikeys' && typeof loadBrevoSlots === 'function') loadBrevoSlots();
   });
 });
 
@@ -844,13 +870,16 @@ function saveProfile() {
 }
 
 function saveBranding() {
-  const logoUrl   = document.getElementById('brandLogoUrl').value;
-  const color     = document.getElementById('brandColor').value;
-  App.userProfile.logoUrl    = logoUrl;
-  App.userProfile.brandColor = color;
+  const logoUrl   = document.getElementById('brandLogoUrl')?.value || App.userProfile.logo_url || '';
+  const sigUrl    = document.getElementById('brandSigUrl')?.value  || App.userProfile.signature_url || '';
+  const color     = document.getElementById('brandColor')?.value || '#dc2626';
+  App.userProfile.logo_url      = logoUrl;
+  App.userProfile.signature_url = sigUrl;
+  App.userProfile.brand_color   = color;
   localStorage.setItem('lf_profile', JSON.stringify(App.userProfile));
-  apiFetch('/api/user/profile', { method: 'PUT', body: JSON.stringify(App.userProfile) }).catch(() => {});
-  toast('Branding saved', 'success');
+  apiFetch('/api/user/profile', { method: 'PUT', body: JSON.stringify({ logo_url: logoUrl, signature_url: sigUrl, brand_color: color }) })
+    .then(() => toast('Branding saved', 'success'))
+    .catch(err => toast('Error saving: ' + err.message, 'error'));
 }
 
 function saveApiKeys() {
@@ -872,8 +901,12 @@ function saveNotifications() { toast('Preferences saved', 'success'); }
 
 function previewLogo(url) {
   const container = document.getElementById('logoPreview');
-  if (!url) { container.innerHTML = '<span>Preview</span>'; return; }
-  container.innerHTML = `<img src="${url}" alt="Logo" onerror="this.parentElement.innerHTML='<span>Invalid URL</span>'" />`;
+  if (!container) return;
+  if (!url) { container.innerHTML = '<span style="font-size:11px;color:var(--text-muted)">Preview</span>'; return; }
+  const img = document.createElement('img');
+  img.src = url; img.alt = 'Logo'; img.style = 'width:100%;height:100%;object-fit:contain';
+  img.onerror = function() { container.innerHTML = '<span style="font-size:11px">Invalid</span>'; };
+  container.innerHTML = ''; container.appendChild(img);
 }
 
 function toggleVisibility(id) {
@@ -888,7 +921,22 @@ function loadProfileIntoForm() {
   if (p.company) document.getElementById('profileCompany').value = p.company;
   if (p.phone)   document.getElementById('profilePhone').value   = p.phone;
   if (p.desc)    document.getElementById('profileDesc').value    = p.desc;
-  if (p.logoUrl) { document.getElementById('brandLogoUrl').value = p.logoUrl; previewLogo(p.logoUrl); }
+  if (p.logo_url || p.logoUrl) {
+    const url = p.logo_url || p.logoUrl;
+    const hiddenEl = document.getElementById('brandLogoUrl');
+    if (hiddenEl) hiddenEl.value = url;
+    previewLogo(url);
+    const nameEl = document.getElementById('brandLogoName');
+    if (nameEl) nameEl.textContent = 'Current logo loaded';
+  }
+  if (p.signature_url) {
+    const hiddenSig = document.getElementById('brandSigUrl');
+    if (hiddenSig) hiddenSig.value = p.signature_url;
+    const prevSig = document.getElementById('sigPreview');
+    if (prevSig) prevSig.innerHTML = '<img src="' + p.signature_url + '" alt="Signature" style="width:100%;height:100%;object-fit:contain" />';
+    const nameEl = document.getElementById('brandSigName');
+    if (nameEl) nameEl.textContent = 'Current signature loaded';
+  }
   if (p.brandColor) document.getElementById('brandColor').value  = p.brandColor;
 }
 

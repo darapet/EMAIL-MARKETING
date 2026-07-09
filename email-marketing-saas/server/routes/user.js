@@ -42,7 +42,7 @@ router.get('/profile', async (req, res, next) => {
 // ─── PUT /api/user/profile ────────────────────────────────────────────────────
 router.put('/profile', async (req, res, next) => {
   try {
-    const allowed = ['name', 'company', 'phone', 'description', 'logo_url', 'brand_color'];
+    const allowed = ['name', 'company', 'phone', 'description', 'logo_url', 'signature_url', 'brand_color'];
     const updates = Object.fromEntries(
       Object.entries(req.body).filter(([k]) => allowed.includes(k))
     );
@@ -156,6 +156,46 @@ router.get('/activity', async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+
+router.get('/brevo-slots', requirePremium, async (req, res, next) => {
+  try {
+    const db = getDb();
+    const { data, error } = await db.from('profiles').select('brevo_keys').eq('id', req.userId).single();
+    if (error) return res.status(400).json({ error: error.message });
+    const slots = (data?.brevo_keys || []).map((s, i) => ({ index:i, label:s.label||'Slot '+(i+1), has_key:!!s.key, sent_today:s.sent_today||0 }));
+    return res.json({ slots });
+  } catch(err){next(err);}
+});
+router.put('/brevo-slots/:index', requirePremium, async (req, res, next) => {
+  try {
+    const idx = parseInt(req.params.index);
+    if (isNaN(idx)||idx<0||idx>4) return res.status(400).json({error:'Slot index must be 0-4.'});
+    const {key,label} = req.body;
+    if (!key) return res.status(400).json({error:'key is required.'});
+    const db = getDb();
+    const { data:p } = await db.from('profiles').select('brevo_keys').eq('id',req.userId).single();
+    const slots = Array.isArray(p?.brevo_keys) ? [...p.brevo_keys] : [];
+    while(slots.length<=idx) slots.push({});
+    slots[idx] = {key, label:label||'Slot '+(idx+1), sent_today:0};
+    const {error} = await db.from('profiles').update({brevo_keys:slots}).eq('id',req.userId);
+    if(error) return res.status(400).json({error:error.message});
+    await logActivity(req.userId,'brevo_slot_update',{index:idx});
+    return res.json({message:'Brevo slot '+(idx+1)+' saved.'});
+  } catch(err){next(err);}
+});
+router.delete('/brevo-slots/:index', requirePremium, async (req, res, next) => {
+  try {
+    const idx = parseInt(req.params.index);
+    if (isNaN(idx)||idx<0||idx>4) return res.status(400).json({error:'Slot index must be 0-4.'});
+    const db = getDb();
+    const {data:p} = await db.from('profiles').select('brevo_keys').eq('id',req.userId).single();
+    const slots = Array.isArray(p?.brevo_keys)?[...p.brevo_keys]:[];
+    if(slots[idx]) slots[idx]={};
+    await db.from('profiles').update({brevo_keys:slots}).eq('id',req.userId);
+    return res.json({message:'Brevo slot '+(idx+1)+' cleared.'});
+  } catch(err){next(err);}
 });
 
 module.exports = router;

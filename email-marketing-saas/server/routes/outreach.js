@@ -107,9 +107,22 @@ router.post('/email', async (req, res, next) => {
     if (lErr) return res.status(400).json({ error: lErr.message });
     if (!leads?.length) return res.status(400).json({ error: 'No eligible leads found.' });
 
+
+    // ── Daily email limit check ─────────────────────────────────────────────
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const lastReset = userProfile.last_send_reset ? String(userProfile.last_send_reset).slice(0, 10) : null;
+    const sentToday = (lastReset === today) ? (userProfile.emails_sent_today || 0) : 0;
+    const dailyLimit = userProfile.email_daily_limit || 300;
+    if (sentToday >= dailyLimit) {
+      return res.status(429).json({ error: 'Daily limit reached (' + dailyLimit + '/day). Resets at midnight. Contact admin to increase.', limit: dailyLimit, sent_today: sentToday });
+    }
+    const availableSlots = dailyLimit - sentToday;
+    const brevoKeys = Array.isArray(userProfile.brevo_keys) ? userProfile.brevo_keys.filter(k => k && k.key) : [];
+    let brevoSlotIdx = 0;
+  
     // Respond immediately — send in background
     res.json({
-      message: `Email campaign started. Sending to ${leads.length} lead(s).`,
+      message: `Email campaign started. Sending to ${Math.min(leads.length, availableSlots)} lead(s).`,
       total:   leads.length,
       provider: userProfile.active_smtp || 'system',
     });
@@ -130,8 +143,17 @@ router.post('/email', async (req, res, next) => {
       let status   = 'sent';
       let errorMsg = null;
 
+      // Pick Brevo slot (rotate across slots if available)
+      const slotProfile = Object.assign({}, userProfile);
+      if (brevoKeys.length > 0) {
+        const slot = brevoKeys[brevoSlotIdx % brevoKeys.length];
+        slotProfile.brevo_api_key = slot.key;
+        slotProfile.active_smtp   = 'brevo';
+        brevoSlotIdx++;
+      }
+
       try {
-        await sendEmail(userProfile, {
+        await sendEmail(slotProfile, {
           toEmail:      lead.email,
           subject,
           body,
@@ -157,7 +179,7 @@ router.post('/email', async (req, res, next) => {
         to_email:    lead.email,
         subject,
         status,
-        provider:    userProfile.active_smtp || 'system',
+        provider:    slotProfile.active_smtp || 'system',
         error_msg:   errorMsg,
       }).catch((e) => console.error('[Outreach] Failed to log send:', e.message));
 
@@ -165,6 +187,7 @@ router.post('/email', async (req, res, next) => {
       await new Promise((r) => setTimeout(r, SEND_DELAY_MS));
     }
 
+    try { await db.from('profiles').update({ emails_sent_today: sentToday + sentCount, last_send_reset: new Date().toISOString().slice(0,10) }).eq('id', req.userId); } catch(_) {}
     await logActivity(req.userId, 'email_blast_done', {
       campaignId,
       sent:   sentCount,

@@ -481,3 +481,185 @@ window._lfAuthHooks.push(async function(user) {
   // Load templates on startup
   loadTemplates();
 });
+
+
+
+// ════════════════════════════════════════════════════════
+// AUTOMATION / SCHEDULING
+// ════════════════════════════════════════════════════════
+
+let _scheduleType = 'email';
+
+function setScheduleType(type) {
+  _scheduleType = type;
+  document.querySelectorAll('.schedule-type-btn').forEach(function(b) {
+    b.classList.toggle('active', b.dataset.type === type);
+  });
+  const subjGroup = document.getElementById('schedSubjectGroup');
+  if (subjGroup) subjGroup.style.display = type === 'email' ? '' : 'none';
+}
+
+async function loadScheduledSends() {
+  try {
+    const data = await apiFetch(API_BASE + '/api/schedule');
+    const list  = document.getElementById('scheduledList');
+    if (!list) return;
+    const items = data.scheduled || [];
+    if (!items.length) {
+      list.innerHTML = '<div class="empty-schedule"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><p>No scheduled sends yet. Create one above!</p></div>';
+      return;
+    }
+    list.innerHTML = items.map(function(s) {
+      const dt          = new Date(s.scheduled_at).toLocaleString();
+      const icon        = s.type === 'whatsapp' ? '📱' : '✉️';
+      const statusColor = s.status === 'pending' ? 'var(--amber)' : s.status === 'sent' ? 'var(--emerald)' : 'var(--red)';
+      const cancelBtn   = s.status === 'pending'
+        ? '<button class="btn btn-ghost btn-sm" data-sid="' + s.id + '" onclick="cancelSchedule(this.dataset.sid)">Cancel</button>'
+        : '';
+      return '<div class="schedule-card">' +
+          '<div class="schedule-card-info">' +
+            '<h4>' + icon + ' ' + (s.subject || s.type.toUpperCase()) + ' <span style="font-size:11px;color:' + statusColor + ';font-weight:600;margin-left:6px">' + s.status + '</span></h4>' +
+            '<p>' + ((s.body || '').slice(0, 80)) + '...</p>' +
+          '</div>' +
+          '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0">' +
+            '<span class="schedule-time-badge">' + dt + '</span>' +
+            cancelBtn +
+          '</div>' +
+        '</div>';
+    }).join('');
+  } catch(e) { console.warn('Schedule load error:', e.message); }
+}
+
+async function cancelSchedule(id) {
+  if (!confirm('Cancel this scheduled send?')) return;
+  try {
+    await apiFetch(API_BASE + '/api/schedule/' + id, { method: 'DELETE' });
+    toast('Scheduled send cancelled', 'success');
+    loadScheduledSends();
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+async function createScheduledSend() {
+  const schedAt    = document.getElementById('schedDateTime') ? document.getElementById('schedDateTime').value : '';
+  const body       = document.getElementById('schedBody')     ? document.getElementById('schedBody').value.trim()    : '';
+  const subject    = document.getElementById('schedSubject')  ? document.getElementById('schedSubject').value.trim() : '';
+  const campEl     = document.getElementById('schedCampaign');
+  const campaignId = campEl ? campEl.value : null;
+
+  if (!schedAt) { toast('Please set a date and time', 'warn'); return; }
+  if (!body)    { toast('Message body is required', 'warn');   return; }
+  if (_scheduleType === 'email' && !subject) { toast('Subject is required for email', 'warn'); return; }
+
+  const schedDate = new Date(schedAt);
+  if (schedDate <= new Date()) { toast('Scheduled time must be in the future', 'warn'); return; }
+
+  try {
+    await apiFetch(API_BASE + '/api/schedule', {
+      method: 'POST',
+      body: JSON.stringify({ type: _scheduleType, scheduled_at: schedDate.toISOString(), campaignId: campaignId, subject: subject, body: body })
+    });
+    toast('Send scheduled!', 'success');
+    ['schedDateTime','schedBody','schedSubject'].forEach(function(id) {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    loadScheduledSends();
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+async function loadCampaignsForSchedule() {
+  try {
+    const data = await apiFetch(API_BASE + '/api/campaigns');
+    const sel  = document.getElementById('schedCampaign');
+    if (!sel) return;
+    const camps = data.campaigns || [];
+    sel.innerHTML = '<option value="">All leads (no specific campaign)</option>' +
+      camps.map(function(c) {
+        return '<option value="' + c.id + '">' + (c.name || c.niche) + '</option>';
+      }).join('');
+  } catch(e) {}
+}
+
+// ════════════════════════════════════════════════════════
+// FILE UPLOAD helpers (brand logo & signature)
+// ════════════════════════════════════════════════════════
+
+async function handleBrandFileUpload(inputEl, type) {
+  const file = inputEl.files && inputEl.files[0];
+  if (!file) return;
+  const nameEl = document.getElementById(type === 'logo' ? 'brandLogoName' : 'brandSigName');
+  if (nameEl) nameEl.textContent = file.name;
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res  = await fetch(API_BASE + '/api/storage/upload/' + type, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + getAuthToken() },
+      body: formData,
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Upload failed');
+    const urlEl = document.getElementById(type === 'logo' ? 'brandLogoUrl' : 'brandSigUrl');
+    if (urlEl) urlEl.value = json.url;
+    if (type === 'logo') previewLogo(json.url);
+    if (type === 'signature') {
+      const prev = document.getElementById('sigPreview');
+      if (prev) prev.innerHTML = '<img src="' + json.url + '" alt="Signature" style="width:100%;height:100%;object-fit:contain" />';
+    }
+    toast(type.charAt(0).toUpperCase() + type.slice(1) + ' uploaded!', 'success');
+  } catch(err) { toast('Upload error: ' + err.message, 'error'); }
+}
+
+// ════════════════════════════════════════════════════════
+// 5 BREVO SLOTS UI
+// ════════════════════════════════════════════════════════
+
+async function loadBrevoSlots() {
+  const grid = document.getElementById('brevoSlotsGrid');
+  if (!grid) return;
+  try {
+    const data  = await apiFetch(API_BASE + '/api/user/brevo-slots');
+    const slots = data.slots || [];
+    while (slots.length < 5) slots.push({ index: slots.length, label: 'Slot ' + (slots.length + 1), has_key: false, sent_today: 0 });
+    grid.innerHTML = slots.map(function(s) {
+      const statusClass = s.has_key ? 'active' : 'empty';
+      const statusText  = s.has_key ? '✓ Active' : 'Empty';
+      const clearBtn    = s.has_key ? '<button class="btn btn-ghost btn-sm" onclick="clearBrevoSlot(' + s.index + ')">✕</button>' : '';
+      return '<div class="brevo-slot-row">' +
+        '<span class="brevo-slot-label">Slot ' + (s.index + 1) + '</span>' +
+        '<input type="password" class="form-input" id="brevoSlot' + s.index + '" placeholder="xkeysib-..." />' +
+        '<input type="text" class="form-input" style="max-width:120px" id="brevoSlotLabel' + s.index + '" placeholder="Label" value="' + (s.label || '') + '" />' +
+        '<span class="brevo-slot-status ' + statusClass + '">' + statusText + '</span>' +
+        '<button class="btn btn-ghost btn-sm" onclick="saveBrevoSlot(' + s.index + ')">Save</button>' +
+        clearBtn +
+      '</div>';
+    }).join('');
+  } catch(e) {
+    if (grid) grid.innerHTML = '<p style="color:var(--text-muted)">Premium feature — upgrade to manage slots.</p>';
+  }
+}
+
+async function saveBrevoSlot(idx) {
+  const keyEl   = document.getElementById('brevoSlot'      + idx);
+  const labelEl = document.getElementById('brevoSlotLabel' + idx);
+  const key     = keyEl   ? keyEl.value.trim()   : '';
+  const label   = labelEl ? labelEl.value.trim()  : '';
+  if (!key) { toast('Enter an API key for slot ' + (idx + 1), 'warn'); return; }
+  try {
+    await apiFetch(API_BASE + '/api/user/brevo-slots/' + idx, {
+      method: 'PUT',
+      body: JSON.stringify({ key: key, label: label })
+    });
+    toast('Brevo slot ' + (idx + 1) + ' saved!', 'success');
+    loadBrevoSlots();
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+async function clearBrevoSlot(idx) {
+  if (!confirm('Clear Brevo slot ' + (idx + 1) + '?')) return;
+  try {
+    await apiFetch(API_BASE + '/api/user/brevo-slots/' + idx, { method: 'DELETE' });
+    toast('Slot cleared', 'success');
+    loadBrevoSlots();
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}

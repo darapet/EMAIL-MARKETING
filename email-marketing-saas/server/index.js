@@ -60,6 +60,8 @@ const storageRoutes   = require('./routes/storage');
 const aiRoutes        = require('./routes/ai');
 const adminRoutes     = require('./routes/admin');
 const whatsappRoutes  = require('./routes/whatsapp');
+const scheduleRoutes  = require('./routes/schedule');
+const { startScheduler } = require('./services/scheduler');
 
 app.use('/api/user',      userRoutes);
 app.use('/api/campaigns', campaignRoutes);
@@ -70,6 +72,7 @@ app.use('/api/storage',   storageRoutes);
 app.use('/api/ai',        aiRoutes);
 app.use('/api/admin',     adminRoutes);
 app.use('/api/whatsapp',  whatsappRoutes);
+app.use('/api/schedule',  scheduleRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', ts: new Date().toISOString() }));
@@ -126,6 +129,7 @@ io.on('connection', (socket) => {
 // ── Start ─────────────────────────────────────────────────────────────────────
 const PORT = parseInt(process.env.PORT || '3000', 10);
 server.listen(PORT, () => {
+  startScheduler(io);
   logger.info(`LeadForge API running on port ${PORT} [${process.env.NODE_ENV || 'development'}]`);
 });
 

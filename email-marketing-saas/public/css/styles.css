@@ -1539,3 +1539,192 @@ option { background: var(--bg-elevated); }
   .page { padding: 16px; }
   .channel-grid { grid-template-columns: repeat(3, 1fr); }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   NEW FEATURES STYLES — Added in update
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ─── Password field with eye toggle ─────────────────────────── */
+.pw-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.pw-wrap .form-input {
+  padding-right: 42px;
+  width: 100%;
+}
+.pw-eye {
+  position: absolute;
+  right: 12px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  transition: var(--transition);
+  z-index: 2;
+}
+.pw-eye:hover { color: var(--primary); }
+
+/* ─── File picker (logo / signature) ─────────────────────────── */
+.file-pick-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.file-pick-label {
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.file-input {
+  display: none;
+}
+.file-name-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+.file-upload-row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+.upload-preview-box {
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius);
+  border: 2px dashed var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--bg-elevated);
+}
+.upload-preview-box img { width:100%; height:100%; object-fit:contain; }
+
+/* ─── 5 Brevo Slots ──────────────────────────────────────────── */
+.brevo-slot-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.brevo-slot-label {
+  font-weight: 600;
+  font-size: 13px;
+  width: 50px;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+.brevo-slot-status.active { color: var(--emerald); font-size:12px; font-weight:600; }
+.brevo-slot-status.empty  { color: var(--text-muted); font-size:12px; }
+#brevoSlotsGrid .form-input { flex: 1; min-width: 140px; }
+
+/* ─── Automation / Schedule page ─────────────────────────────── */
+.schedule-form-card { margin-bottom: 24px; }
+.schedule-type-row  { display: flex; gap: 8px; margin-bottom: 16px; }
+.schedule-type-btn  {
+  padding: 8px 20px;
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.schedule-type-btn.active {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  color: var(--primary);
+}
+.schedule-datetime-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.schedule-datetime-row .form-group { flex: 1; min-width: 180px; }
+.schedule-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.schedule-card:last-child { border-bottom: none; }
+.schedule-card-info h4 { font-size:14px; font-weight:600; margin-bottom:4px; }
+.schedule-card-info p  { font-size:12px; color:var(--text-muted); }
+.schedule-time-badge {
+  background: var(--bg-elevated);
+  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.empty-schedule {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-muted);
+}
+.empty-schedule svg { width:40px; height:40px; margin-bottom:12px; opacity:0.4; }
+
+/* ─── Country grid — checkbox style ─────────────────────────── */
+.country-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  transition: var(--transition);
+  user-select: none;
+}
+.country-item:hover { background: var(--bg-hover); border-color: var(--primary-light); }
+.country-item.selected { background: var(--primary-light); border-color: var(--primary); }
+.country-cb {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border-light);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: var(--transition);
+}
+.country-item.selected .country-cb {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+.country-cb-tick { display: none; color: #fff; font-size: 11px; }
+.country-item.selected .country-cb-tick { display: block; }
+.select-all-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding: 0 2px;
+}
+.select-all-bar small { color: var(--text-muted); font-size: 12px; }
+
+/* ─── Admin email limit row ───────────────────────────────────── */
+.email-limit-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+.email-limit-row .form-input { max-width: 120px; }
+

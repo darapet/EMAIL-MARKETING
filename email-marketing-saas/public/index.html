@@ -47,7 +47,12 @@
           </div>
           <div class="form-group">
             <label class="form-label">Password</label>
-            <input type="password" class="form-input" id="loginPassword" placeholder="••••••••" required autocomplete="current-password" />
+            <div class="pw-wrap">
+              <input type="password" class="form-input" id="loginPassword" placeholder="••••••••" required autocomplete="current-password" />
+              <button type="button" class="pw-eye" onclick="togglePwVisibility('loginPassword')" tabindex="-1" title="Show/hide password">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
           </div>
           <div id="loginError" class="auth-error" style="display:none"></div>
           <button type="submit" class="btn btn-primary btn-full" id="loginBtn" data-label="Sign In">Sign In</button>
@@ -68,11 +73,17 @@
           </div>
           <div class="form-group">
             <label class="form-label">Password</label>
-            <input type="password" class="form-input" id="regPassword" placeholder="Min. 6 characters" required autocomplete="new-password" />
+            <div class="pw-wrap">
+              <input type="password" class="form-input" id="regPassword" placeholder="Min. 6 characters" required autocomplete="new-password" />
+              <button type="button" class="pw-eye" onclick="togglePwVisibility('regPassword')" tabindex="-1">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
           </div>
           <div class="form-group">
             <label class="form-label">Confirm Password</label>
-            <input type="password" class="form-input" id="regConfirm" placeholder="Repeat password" required />
+            <div class="pw-wrap">
+              <input type="password" class="form-input" id="regConfirm" placeholder="Repeat password" required />
           </div>
           <div id="registerError" class="auth-error" style="display:none"></div>
           <button type="submit" class="btn btn-primary btn-full" id="registerBtn" data-label="Create Account">Create Account</button>
@@ -149,6 +160,10 @@
       <a href="#" class="nav-item" data-page="templates">
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
         <span>Templates</span>
+      </a>
+      <a href="#" class="nav-item" data-page="automation">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
+        <span>Automation</span>
       </a>
       <a href="#" class="nav-item" data-page="settings">
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -504,6 +519,10 @@
             <div class="location-search-wrap">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
               <input type="text" id="countrySearch" class="location-search" placeholder="Search country..." oninput="filterCountries(this.value)" />
+            </div>
+            <div class="select-all-bar">
+              <button class="btn btn-ghost btn-sm" id="selectAllCountriesBtn" onclick="selectAllCountries()">Select All Countries</button>
+              <small id="selectedCountryCount">0 selected</small>
             </div>
             <div class="countries-grid" id="countriesGrid">
               <!-- Populated by JS -->
@@ -998,11 +1017,32 @@ I specialize in helping {niche} businesses scale their revenue through targeted 
               <div class="card-header"><h2>Brand Identity</h2></div>
               <div class="settings-form">
                 <div class="form-group">
-                  <label class="form-label">Logo URL</label>
-                  <div class="logo-upload-row">
-                    <input type="url" class="form-input" id="brandLogoUrl" placeholder="https://yoursite.com/logo.png" oninput="previewLogo(this.value)" />
-                    <div class="logo-preview" id="logoPreview">
-                      <span>Preview</span>
+                  <label class="form-label">Company Logo</label>
+                  <div class="file-upload-row">
+                    <div class="upload-preview-box" id="logoPreview"><span style="font-size:11px;color:var(--text-muted)">Preview</span></div>
+                    <div style="flex:1">
+                      <div class="file-pick-row">
+                        <input type="file" id="brandLogoFile" class="file-input" accept="image/*" onchange="handleBrandFileUpload(this,'logo')" />
+                        <label for="brandLogoFile" class="btn btn-ghost btn-sm file-pick-label">📁 Choose Logo</label>
+                        <span id="brandLogoName" class="file-name-hint">No file chosen</span>
+                      </div>
+                      <input type="hidden" id="brandLogoUrl" />
+                      <p class="form-hint" style="margin-top:6px">JPG, PNG, SVG or WebP · max 2 MB</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Email Signature Image</label>
+                  <div class="file-upload-row">
+                    <div class="upload-preview-box" id="sigPreview"><span style="font-size:11px;color:var(--text-muted)">Preview</span></div>
+                    <div style="flex:1">
+                      <div class="file-pick-row">
+                        <input type="file" id="brandSigFile" class="file-input" accept="image/*" onchange="handleBrandFileUpload(this,'signature')" />
+                        <label for="brandSigFile" class="btn btn-ghost btn-sm file-pick-label">📁 Choose Signature</label>
+                        <span id="brandSigName" class="file-name-hint">No file chosen</span>
+                      </div>
+                      <input type="hidden" id="brandSigUrl" />
+                      <p class="form-hint" style="margin-top:6px">JPG or PNG · max 1 MB</p>
                     </div>
                   </div>
                 </div>
@@ -1061,6 +1101,17 @@ I specialize in helping {niche} businesses scale their revenue through targeted 
                 <div class="form-group">
                   <label class="form-label">Mailgun Domain <span class="badge badge-muted" style="margin-left:6px">Premium</span></label>
                   <input type="text" class="form-input" id="mailgunDomain" placeholder="mg.yourdomain.com" />
+                </div>
+
+                <div class="form-group" style="border-top:1px solid var(--border);padding-top:20px;margin-top:8px">
+                  <label class="form-label">
+                    5 Brevo SMTP Slots
+                    <span class="badge badge-muted" style="margin-left:6px">Premium</span>
+                  </label>
+                  <p class="form-hint">Add up to 5 separate Brevo accounts. The system rotates through available slots automatically to distribute sending load.</p>
+                  <div id="brevoSlotsGrid" style="margin-top:12px">
+                    <p style="color:var(--text-muted);font-size:13px">Loading slots...</p>
+                  </div>
                 </div>
                 <div class="premium-gate-overlay" id="apiKeysPremiumGate" style="display:none">
                   <div class="premium-gate-content">
@@ -1171,6 +1222,69 @@ I specialize in helping {niche} businesses scale their revenue through targeted 
           <div class="btn-row">
             <button class="btn btn-ghost" onclick="clearTemplateForm()">Cancel</button>
             <button class="btn btn-primary" onclick="saveTemplate()">Save Template</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ════════════════════════════════════════════
+         PAGE: AUTOMATION
+    ════════════════════════════════════════════ -->
+    <section class="page" id="page-automation">
+      <div class="page-header" style="margin-bottom:24px">
+        <h2 style="font-size:20px;font-weight:700">Automation &amp; Scheduling</h2>
+        <p style="color:var(--text-muted);margin-top:4px">Schedule email or WhatsApp campaigns to send automatically at a specific date and time.</p>
+      </div>
+
+      <!-- Schedule builder -->
+      <div class="card schedule-form-card">
+        <div class="card-header"><h2>Create Scheduled Send</h2></div>
+        <div class="settings-form">
+          <div class="schedule-type-row">
+            <button class="schedule-type-btn active" data-type="email" onclick="setScheduleType('email')">✉️ Email</button>
+            <button class="schedule-type-btn" data-type="whatsapp" onclick="setScheduleType('whatsapp')">📱 WhatsApp</button>
+          </div>
+          <div class="schedule-datetime-row">
+            <div class="form-group">
+              <label class="form-label">Target Campaign (optional)</label>
+              <select class="form-input" id="schedCampaign">
+                <option value="">All leads (no specific campaign)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Send Date &amp; Time</label>
+              <input type="datetime-local" class="form-input" id="schedDateTime" />
+              <p class="form-hint">Your local time — must be in the future</p>
+            </div>
+          </div>
+          <div class="form-group" id="schedSubjectGroup">
+            <label class="form-label">Email Subject *</label>
+            <input type="text" class="form-input" id="schedSubject" placeholder="e.g. Partnership Opportunity — {businessName}" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Message Body *</label>
+            <textarea class="form-textarea" id="schedBody" rows="6" placeholder="Hi {businessName},&#10;&#10;...&#10;&#10;Use {businessName}, {yourName}, {yourCompany} as merge fields."></textarea>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="createScheduledSend()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
+              Schedule Send
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scheduled sends list -->
+      <div class="card">
+        <div class="card-header">
+          <h2>Upcoming &amp; Recent Schedules</h2>
+          <button class="btn btn-ghost btn-sm" onclick="loadScheduledSends()">Refresh</button>
+        </div>
+        <div id="scheduledList">
+          <div class="empty-schedule">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            <p>No scheduled sends yet.</p>
           </div>
         </div>
       </div>

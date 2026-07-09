@@ -270,4 +270,18 @@ router.put('/branding', async (req, res, next) => {
   }
 });
 
+
+// ─── PUT /api/admin/users/:id/email-limit ────────────────────────────────────
+router.put('/users/:id/email-limit', async (req, res, next) => {
+  try {
+    const limit = parseInt(req.body.email_daily_limit);
+    if (isNaN(limit) || limit < 0) return res.status(400).json({ error: 'email_daily_limit must be a non-negative integer.' });
+    const db = getDb();
+    const { data, error } = await db.from('profiles').update({ email_daily_limit: limit }).eq('id', req.params.id).select('id,email,email_daily_limit').single();
+    if (error || !data) return res.status(404).json({ error: 'User not found.' });
+    await logActivity(req.userId, 'admin_email_limit_change', { targetUserId: req.params.id, email_daily_limit: limit });
+    return res.json({ message: 'Email limit updated to ' + limit + '/day.', user: data });
+  } catch (err) { next(err); }
+});
+
 module.exports = router;
