@@ -208,19 +208,21 @@ function renderTemplatesList() {
     return;
   }
 
+  // esc() defined in app.js (loaded before features.js renders)
+  const e = typeof esc === 'function' ? esc : s => String(s ?? '').replace(/[<>"'&]/g, c => ({'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;','&':'&amp;'}[c]));
   container.innerHTML = _templates.map(t => `
     <div class="template-card ${t.is_default ? 'is-default' : ''}">
       <div class="template-card-header">
-        <strong>${t.name}</strong>
+        <strong>${e(t.name)}</strong>
         ${t.is_default ? '<span class="badge badge-success">Default</span>' : ''}
       </div>
-      ${t.logo_url ? `<img src="${t.logo_url}" class="template-logo" alt="logo" />` : ''}
-      <p class="template-subject">${t.subject || '—'}</p>
-      <p class="template-preview">${(t.body || '').substring(0, 100)}...</p>
+      ${t.logo_url ? `<img src="${e(t.logo_url)}" class="template-logo" alt="logo" />` : ''}
+      <p class="template-subject">${e(t.subject || '—')}</p>
+      <p class="template-preview">${e((t.body || '').substring(0, 100))}...</p>
       <div class="template-actions">
-        ${!t.is_default ? `<button class="btn btn-ghost btn-sm" onclick="setDefaultTemplate('${t.id}')">Set Default</button>` : ''}
-        <button class="btn btn-ghost btn-sm" onclick="editTemplate('${t.id}')">Edit</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteTemplate('${t.id}')">Delete</button>
+        ${!t.is_default ? `<button class="btn btn-ghost btn-sm" onclick="setDefaultTemplate('${e(t.id)}')">Set Default</button>` : ''}
+        <button class="btn btn-ghost btn-sm" onclick="editTemplate('${e(t.id)}')">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteTemplate('${e(t.id)}')">Delete</button>
       </div>
     </div>
   `).join('');
@@ -346,18 +348,19 @@ function renderAdminUsers(users) {
     tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:20px">No users yet</td></tr>';
     return;
   }
+  const e2 = typeof esc === 'function' ? esc : s => String(s ?? '').replace(/[<>"'&]/g, c => ({'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;','&':'&amp;'}[c]));
   tbody.innerHTML = users.map(u => `
     <tr>
-      <td><strong>${u.name || u.email?.split('@')[0]}</strong><br><small style="color:var(--text-muted)">${u.email}</small></td>
-      <td><span class="badge ${u.plan === 'premium' ? 'badge-success' : 'badge-muted'}">${u.plan || 'free'}</span></td>
+      <td><strong>${e2(u.name || (u.email || '').split('@')[0])}</strong><br><small style="color:var(--text-muted)">${e2(u.email || '')}</small></td>
+      <td><span class="badge ${u.plan === 'premium' ? 'badge-success' : 'badge-muted'}">${e2(u.plan || 'free')}</span></td>
       <td>${u.is_admin ? '<span class="badge badge-warn">Admin</span>' : '—'}</td>
       <td style="color:var(--text-muted);font-size:12px">${u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}</td>
       <td>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button class="btn btn-sm btn-ghost" onclick="adminTogglePlan('${u.id}','${u.plan}')">
+          <button class="btn btn-sm btn-ghost" onclick="adminTogglePlan('${e2(u.id)}','${e2(u.plan || '')}')">
             ${u.plan === 'premium' ? 'Downgrade' : '⬆ Upgrade'}
           </button>
-          ${!u.is_admin ? `<button class="btn btn-sm btn-ghost" onclick="adminToggleAdmin('${u.id}')">Make Admin</button>` : ''}
+          ${!u.is_admin ? `<button class="btn btn-sm btn-ghost" onclick="adminToggleAdmin('${e2(u.id)}')">Make Admin</button>` : ''}
         </div>
       </td>
     </tr>
@@ -401,12 +404,13 @@ async function loadAdminActivity() {
       tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:20px">No activity yet</td></tr>';
       return;
     }
+    const e3 = typeof esc === 'function' ? esc : s => String(s ?? '').replace(/[<>"'&]/g, c => ({'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;','&':'&amp;'}[c]));
     tbody.innerHTML = logs.map(l => `
       <tr>
         <td style="font-size:12px;color:var(--text-muted)">${l.created_at ? new Date(l.created_at).toLocaleString() : '—'}</td>
-        <td>${l.profiles?.email || l.user_id?.substring(0,8)}</td>
-        <td><code style="font-size:11px">${l.action}</code></td>
-        <td style="font-size:11px;color:var(--text-muted)">${l.metadata ? JSON.stringify(l.metadata).substring(0,60) : '—'}</td>
+        <td>${e3(l.profiles?.email || (l.user_id || '').substring(0,8))}</td>
+        <td><code style="font-size:11px">${e3(l.action || '')}</code></td>
+        <td style="font-size:11px;color:var(--text-muted)">${e3(l.metadata ? JSON.stringify(l.metadata).substring(0,60) : '—')}</td>
       </tr>
     `).join('');
   } catch (err) {
@@ -444,10 +448,11 @@ function showPremiumModal() {
   document.getElementById('premiumModal')?.classList.add('open');
 }
 
-// ── INIT: extend app.js onAuthReady ──────────────────────────────────────────
-const _origOnAuthReady = window.onAuthReady;
-window.onAuthReady = async function(user) {
-  if (_origOnAuthReady) _origOnAuthReady(user);
+// ── Register auth hook via global hook array ──────────────────────────────────
+// app.js (loaded after this file) owns onAuthReady and drains _lfAuthHooks.
+// This avoids any wrapper-override race condition.
+window._lfAuthHooks = window._lfAuthHooks || [];
+window._lfAuthHooks.push(async function(user) {
   App.isPremium = App.isPremium || false;
   App.isAdmin   = App.isAdmin   || false;
   App.emailProvider = 'system';
@@ -461,14 +466,18 @@ window.onAuthReady = async function(user) {
       App.userProfile = { ...App.userProfile, ...profile.profile };
       // Show admin nav
       if (App.isAdmin) {
-        document.getElementById('adminNavItem')?.style.removeProperty('display');
+        const adminNav = document.getElementById('adminNavItem');
+        if (adminNav) adminNav.style.display = 'flex';
       }
       // Update plan badge
       const planEl = document.querySelector('.user-plan');
-      if (planEl) planEl.textContent = (profile.profile.plan || 'free').charAt(0).toUpperCase() + (profile.profile.plan || 'free').slice(1) + ' Plan';
+      if (planEl) {
+        const plan = profile.profile.plan || 'free';
+        planEl.textContent = plan.charAt(0).toUpperCase() + plan.slice(1) + ' Plan';
+      }
     }
   } catch {}
 
   // Load templates on startup
   loadTemplates();
-};
+});

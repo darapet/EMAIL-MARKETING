@@ -288,9 +288,10 @@ async function launchCampaign() {
   document.getElementById('scrapeLog').innerHTML = '';
 
   try {
-    const res = await apiFetch('/api/campaigns', {
+    const emailCount = typeof getEmailCount === 'function' ? getEmailCount() : 50;
+  const res = await apiFetch('/api/campaigns', {
       method: 'POST',
-      body: JSON.stringify({ name, niche, depth, channels, locations }),
+      body: JSON.stringify({ name, niche, depth, channels, locations, emailCount }),
     });
 
     if (res.campaignId) {
@@ -321,6 +322,10 @@ function onScrapeComplete(data) {
   appendScrapeLog(`✓ Done! Found ${data.totalLeads} leads.`, 'success');
   updateBadge('leadsBadge', data.totalLeads);
   toast(`Scrape complete — ${data.totalLeads} leads found`, 'success');
+  // Show scraped leads preview before sending, if feature is available
+  if (data.campaignId && data.totalLeads > 0 && typeof showScrapedPreview === 'function') {
+    setTimeout(() => showScrapedPreview(data.campaignId, data.totalLeads), 800);
+  }
 }
 
 function appendScrapeLog(text, type = 'info') {
@@ -362,26 +367,28 @@ function renderCampaignsTable(list) {
     return;
   }
 
-  tbody.innerHTML = rows.map(c => `
+  tbody.innerHTML = rows.map(c => {
+    const cid = esc(c.campaignId || c.id || '');
+    return `
     <tr>
-      <td><code style="font-family:var(--font-mono);font-size:11px;color:var(--indigo-light)">${c.campaignId || c.id || '—'}</code></td>
-      <td><strong>${c.niche}</strong></td>
-      <td>${(c.locations || []).map(l => l.country).join(', ') || '—'}</td>
+      <td><code style="font-family:var(--font-mono);font-size:11px;color:var(--primary)">${cid || '—'}</code></td>
+      <td><strong>${esc(c.niche)}</strong></td>
+      <td>${esc((c.locations || []).map(l => l.country).join(', ')) || '—'}</td>
       <td>
-        ${(c.channels || []).slice(0,4).map(ch => `<span class="badge badge-muted" style="margin-right:3px">${ch}</span>`).join('')}
-        ${(c.channels || []).length > 4 ? `<span class="badge badge-muted">+${c.channels.length - 4}</span>` : ''}
+        ${(c.channels || []).slice(0,4).map(ch => `<span class="badge badge-muted" style="margin-right:3px">${esc(ch)}</span>`).join('')}
+        ${(c.channels || []).length > 4 ? `<span class="badge badge-muted">+${(c.channels.length - 4)}</span>` : ''}
       </td>
-      <td><strong>${c.leadsCount || 0}</strong></td>
-      <td><span class="badge ${statusBadge(c.status)}">${c.status || 'pending'}</span></td>
-      <td style="color:var(--text-muted);font-size:12px">${formatDate(c.createdAt)}</td>
+      <td><strong>${Number(c.leadsCount || 0)}</strong></td>
+      <td><span class="badge ${statusBadge(c.status)}">${esc(c.status || 'pending')}</span></td>
+      <td style="color:var(--text-muted);font-size:12px">${esc(formatDate(c.createdAt))}</td>
       <td>
         <div style="display:flex;gap:6px">
-          <button class="btn btn-ghost btn-sm" onclick="viewCampaignLeads('${c.campaignId || c.id}')">View Leads</button>
-          <button class="btn btn-primary btn-sm" onclick="outreachForCampaign('${c.campaignId || c.id}')">Outreach</button>
+          <button class="btn btn-ghost btn-sm" onclick="viewCampaignLeads('${cid}')">View Leads</button>
+          <button class="btn btn-primary btn-sm" onclick="outreachForCampaign('${cid}')">Outreach</button>
         </div>
       </td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
 }
 
 function filterCampaigns(q) {
@@ -441,22 +448,22 @@ function renderLeadsTable(list) {
 
   tbody.innerHTML = rows.map((lead, i) => `
     <tr>
-      <td><input type="checkbox" class="lead-cb" data-id="${lead.leadId || i}" /></td>
-      <td><strong>${lead.businessName || '—'}</strong></td>
+      <td><input type="checkbox" class="lead-cb" data-id="${esc(lead.leadId || String(i))}" /></td>
+      <td><strong>${esc(lead.businessName || '—')}</strong></td>
       <td>
         ${lead.email
-          ? `<a href="mailto:${lead.email}" style="color:var(--indigo-light)">${lead.email}</a>`
+          ? `<a href="mailto:${esc(lead.email)}" style="color:var(--primary)">${esc(lead.email)}</a>`
           : '<span style="color:var(--text-muted)">—</span>'
         }
       </td>
-      <td>${lead.phone || '<span style="color:var(--text-muted)">—</span>'}</td>
+      <td>${lead.phone ? esc(lead.phone) : '<span style="color:var(--text-muted)">—</span>'}</td>
       <td>
         ${(lead.socialUrls || []).slice(0,3).map(u => `
-          <a href="${u}" target="_blank" style="font-size:11px;margin-right:4px;color:var(--text-muted)">
-            ${getDomain(u)}
+          <a href="${esc(u)}" target="_blank" style="font-size:11px;margin-right:4px;color:var(--text-muted)">
+            ${esc(getDomain(u))}
           </a>
         `).join('')}
-        ${(lead.socialUrls || []).length > 3 ? `<span style="font-size:11px;color:var(--text-muted)">+${lead.socialUrls.length - 3}</span>` : ''}
+        ${(lead.socialUrls || []).length > 3 ? `<span style="font-size:11px;color:var(--text-muted)">+${(lead.socialUrls.length - 3)}</span>` : ''}
       </td>
       <td>
         <span class="badge ${lead.waVerified ? 'badge-success' : 'badge-muted'}">
@@ -620,7 +627,7 @@ function setWAStatus(status) {
 
 async function disconnectWA() {
   try {
-    await apiFetch('/api/whatsapp/disconnect', { method: 'POST', body: JSON.stringify({ userId: getCurrentUserId() }) });
+    await apiFetch('/api/whatsapp/disconnect', { method: 'POST', body: JSON.stringify({}) });
     setWAConnected(false);
     toast('WhatsApp disconnected', 'info');
   } catch (err) {
@@ -666,7 +673,7 @@ async function startWABroadcast() {
   try {
     await apiFetch('/api/whatsapp/broadcast', {
       method: 'POST',
-      body: JSON.stringify({ userId: getCurrentUserId(), campaignId, message, minDelay, maxDelay, source: App.broadcastSource }),
+      body: JSON.stringify({ campaignId, message, minDelay, maxDelay, source: App.broadcastSource }),
     });
     toast('Broadcast started!', 'success');
   } catch (err) {
@@ -784,11 +791,15 @@ async function startEmailCampaign() {
         campaignId,
         subject,
         body,
+        provider:     App.emailProvider || 'system',
+        leadIds:      App._pendingLeadIds || [],
         includeLogo:  document.getElementById('includeLogo').checked,
         includePhone: document.getElementById('includePhone').checked,
         logoUrl: document.getElementById('brandLogoUrl')?.value || '',
       }),
     });
+    // Clear pending lead selection after send
+    App._pendingLeadIds = [];
     toast(`Email campaign started — ${res.queued || 0} messages queued`, 'success');
   } catch (err) {
     toast('Failed to start campaign: ' + err.message, 'error');
@@ -826,7 +837,7 @@ function saveProfile() {
     desc:    document.getElementById('profileDesc').value,
   };
   localStorage.setItem('lf_profile', JSON.stringify(App.userProfile));
-  updateUserUI();
+  _updateLocalNameUI(App.userProfile.name);
   apiFetch('/api/user/profile', { method: 'PUT', body: JSON.stringify(App.userProfile) })
     .catch(() => {});
   toast('Profile saved', 'success');
@@ -843,12 +854,18 @@ function saveBranding() {
 }
 
 function saveApiKeys() {
-  const brevoKey = document.getElementById('brevoApiKey').value;
-  if (brevoKey) {
-    apiFetch('/api/user/apikeys', { method: 'PUT', body: JSON.stringify({ brevoApiKey: brevoKey }) })
-      .then(() => toast('API keys saved securely', 'success'))
-      .catch(err => toast('Error saving keys: ' + err.message, 'error'));
-  }
+  if (!App.isPremium) { showPremiumModal(); return; }
+  const payload = {
+    brevoApiKey:    document.getElementById('brevoApiKey')?.value    || undefined,
+    sendgridApiKey: document.getElementById('sendgridApiKey')?.value || undefined,
+    mailgunApiKey:  document.getElementById('mailgunApiKey')?.value  || undefined,
+    mailgunDomain:  document.getElementById('mailgunDomain')?.value  || undefined,
+  };
+  // Remove empty keys
+  Object.keys(payload).forEach(k => { if (!payload[k]) delete payload[k]; });
+  apiFetch('/api/user/apikeys', { method: 'PUT', body: JSON.stringify(payload) })
+    .then(() => toast('API keys saved securely', 'success'))
+    .catch(err => toast('Error saving keys: ' + err.message, 'error'));
 }
 
 function saveNotifications() { toast('Preferences saved', 'success'); }
@@ -875,12 +892,14 @@ function loadProfileIntoForm() {
   if (p.brandColor) document.getElementById('brandColor').value  = p.brandColor;
 }
 
-function updateUserUI() {
-  const p = App.userProfile;
-  if (p.name) {
-    document.getElementById('userName').textContent = p.name;
-    document.getElementById('userAvatar').textContent = p.name.charAt(0).toUpperCase();
-  }
+// updateUserUI is defined in auth.js (loaded before this file).
+// This stub ensures any legacy internal call still works safely.
+function _updateLocalNameUI(name) {
+  if (!name) return;
+  const nameEl   = document.getElementById('userName');
+  const avatarEl = document.getElementById('userAvatar');
+  if (nameEl)   nameEl.textContent   = name;
+  if (avatarEl) avatarEl.textContent = name.charAt(0).toUpperCase();
 }
 
 // ═══════════════════════════════════════════════════
@@ -938,6 +957,17 @@ function updateBadge(id, count) {
   if (el) el.textContent = count;
 }
 
+// XSS-safe HTML escape for user-supplied content injected into innerHTML
+function esc(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 function statusBadge(status) {
   const map = { running: 'badge-indigo', complete: 'badge-success', error: 'badge-error', optout: 'badge-error', verified: 'badge-success', pending: 'badge-warn' };
   return map[status] || 'badge-muted';
@@ -965,12 +995,15 @@ function downloadFile(filename, mimeType, content) {
 // The DOMContentLoaded below only sets up UI that doesn't need auth.
 // ═══════════════════════════════════════════════════
 
-// Called by auth.js after sign-in is confirmed
+// Called by auth.js after Supabase confirms a session.
+// Drains the _lfAuthHooks array registered by features.js and other modules.
 function onAuthReady(user) {
   renderCountries(COUNTRIES);
   loadProfileIntoForm();
   try { initSocket(); } catch (e) { console.warn('Socket.io unavailable — demo mode'); }
   loadCampaigns().catch(() => console.warn('API unavailable — demo mode'));
+  // Run all registered feature hooks (features.js, etc.)
+  (window._lfAuthHooks || []).forEach(fn => { try { fn(user); } catch(e) { console.warn('[hook]', e); } });
 }
 
 document.addEventListener('DOMContentLoaded', () => {
