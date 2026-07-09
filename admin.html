@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LeadForge — Admin</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --primary: #dc2626; --primary-dk: #b91c1c;
+      --bg: #0f1117; --surface: #1a1d27; --elevated: #22263a; --border: #2e3347;
+      --text: #f0f2ff; --muted: #8b92b3;
+      --green: #22c55e; --amber: #f59e0b; --blue: #6366f1; --red: #dc2626;
+      --radius: 10px; --shadow: 0 4px 24px rgba(0,0,0,.4);
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    /* LOGIN */
+    #loginScreen { display:flex; align-items:center; justify-content:center; min-height:100vh; padding:24px; }
+    .login-box { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:40px 36px; width:100%; max-width:400px; box-shadow:var(--shadow); }
+    .login-brand { display:flex; align-items:center; gap:12px; margin-bottom:32px; }
+    .brand-icon { width:44px; height:44px; background:var(--primary); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:22px; }
+    .brand-name { font-size:20px; font-weight:800; }
+    .brand-tag  { font-size:11px; color:var(--muted); margin-top:1px; }
+    .login-title { font-size:22px; font-weight:700; margin-bottom:6px; }
+    .login-sub   { color:var(--muted); font-size:13px; margin-bottom:28px; }
+    .form-group  { margin-bottom:16px; }
+    .form-label  { display:block; font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px; }
+    .form-input  { width:100%; padding:11px 14px; background:var(--elevated); border:1.5px solid var(--border); border-radius:8px; color:var(--text); font-size:14px; transition:border-color .2s; }
+    .form-input:focus { outline:none; border-color:var(--primary); }
+    .pw-wrap { position:relative; }
+    .pw-wrap .form-input { padding-right:44px; }
+    .pw-eye { position:absolute; right:12px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--muted); cursor:pointer; padding:4px; display:flex; align-items:center; }
+    .pw-eye:hover { color:var(--text); }
+    .btn-login { width:100%; padding:12px; background:var(--primary); color:#fff; border:none; border-radius:8px; font-size:15px; font-weight:700; cursor:pointer; transition:background .2s; margin-top:6px; }
+    .btn-login:hover:not(:disabled) { background:var(--primary-dk); }
+    .btn-login:disabled { opacity:.6; cursor:not-allowed; }
+    .login-error { background:rgba(220,38,38,.12); border:1px solid rgba(220,38,38,.3); border-radius:8px; padding:10px 14px; color:#fca5a5; font-size:13px; margin-bottom:16px; display:none; }
+
+    /* SHELL */
+    #adminShell { display:none; }
+    .topbar { background:var(--surface); border-bottom:1px solid var(--border); padding:0 24px; height:60px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:100; }
+    .topbar-l { display:flex; align-items:center; gap:10px; }
+    .topbar-logo { width:34px; height:34px; background:var(--primary); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:17px; }
+    .topbar-title { font-size:16px; font-weight:800; }
+    .topbar-badge { background:rgba(220,38,38,.15); color:var(--primary); border:1px solid rgba(220,38,38,.3); border-radius:6px; padding:2px 8px; font-size:11px; font-weight:700; }
+    .topbar-r { display:flex; align-items:center; gap:12px; }
+    .admin-email-lbl { font-size:13px; color:var(--muted); }
+    .btn-out { padding:7px 14px; background:var(--elevated); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:13px; cursor:pointer; }
+    .btn-out:hover { background:var(--border); }
+
+    /* TABS */
+    .tabs { display:flex; gap:2px; padding:0 24px; border-bottom:1px solid var(--border); background:var(--surface); overflow-x:auto; }
+    .tab { padding:14px 20px; border:none; background:none; color:var(--muted); font-size:13px; font-weight:600; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; white-space:nowrap; transition:all .2s; }
+    .tab.on { color:var(--primary); border-bottom-color:var(--primary); }
+    .tab:hover:not(.on) { color:var(--text); }
+
+    /* BODY */
+    .body { padding:24px; max-width:1200px; margin:0 auto; }
+    .panel { display:none; }
+    .panel.on { display:block; }
+
+    /* STATS */
+    .stats { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:16px; margin-bottom:28px; }
+    .stat { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:20px; }
+    .stat-n { font-size:30px; font-weight:800; margin-bottom:4px; }
+    .stat-l { font-size:12px; color:var(--muted); }
+    .cr { color:var(--red); } .cg { color:var(--green); } .cb { color:var(--blue); } .ca { color:var(--amber); }
+
+    /* CARD */
+    .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); margin-bottom:20px; overflow:hidden; }
+    .card-hd { display:flex; align-items:center; justify-content:space-between; padding:14px 20px; border-bottom:1px solid var(--border); }
+    .card-hd h2 { font-size:14px; font-weight:700; }
+
+    /* TABLE */
+    .tbl-wrap { overflow-x:auto; }
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    th { text-align:left; padding:10px 16px; font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; border-bottom:1px solid var(--border); white-space:nowrap; }
+    td { padding:11px 16px; border-bottom:1px solid var(--border); vertical-align:middle; }
+    tr:last-child td { border-bottom:none; }
+    tr:hover td { background:rgba(255,255,255,.02); }
+
+    /* BADGES */
+    .badge { display:inline-block; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:700; }
+    .b-red   { background:rgba(220,38,38,.15); color:#fca5a5; }
+    .b-green { background:rgba(34,197,94,.12); color:#86efac; }
+    .b-amber { background:rgba(245,158,11,.12); color:#fde68a; }
+    .b-muted { background:var(--elevated); color:var(--muted); }
+
+    /* BUTTONS */
+    .btn-xs { padding:4px 10px; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; border:1px solid var(--border); background:var(--elevated); color:var(--text); transition:background .15s; white-space:nowrap; }
+    .btn-xs:hover { background:var(--border); }
+    .btn-xs.ok  { color:#86efac; border-color:rgba(34,197,94,.3); }
+    .btn-xs.ok:hover { background:rgba(34,197,94,.1); }
+    .btn-xs.rm  { color:#fca5a5; border-color:rgba(220,38,38,.3); }
+    .btn-xs.rm:hover { background:rgba(220,38,38,.1); }
+    .btn-ref { padding:7px 14px; background:var(--elevated); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:12px; cursor:pointer; }
+    .btn-ref:hover { background:var(--border); }
+    .limit-inp { width:80px; padding:4px 8px; font-size:12px; background:var(--elevated); border:1px solid var(--border); border-radius:6px; color:var(--text); text-align:center; }
+
+    /* SEARCH */
+    .search-row { display:flex; gap:10px; margin-bottom:20px; }
+    .search-inp { flex:1; padding:9px 14px; background:var(--surface); border:1.5px solid var(--border); border-radius:8px; color:var(--text); font-size:14px; }
+    .search-inp:focus { outline:none; border-color:var(--primary); }
+
+    /* ACTIVITY */
+    .act-row { display:flex; gap:12px; align-items:flex-start; padding:12px 20px; border-bottom:1px solid var(--border); }
+    .act-row:last-child { border-bottom:none; }
+    .act-dot { width:8px; height:8px; border-radius:50%; background:var(--primary); flex-shrink:0; margin-top:5px; }
+    .act-action { font-size:13px; font-weight:600; }
+    .act-meta   { font-size:12px; color:var(--muted); margin-top:2px; }
+
+    /* LOADING */
+    .loading { text-align:center; padding:40px; color:var(--muted); font-size:14px; }
+    .spinner { width:26px; height:26px; border:3px solid var(--border); border-top-color:var(--primary); border-radius:50%; animation:spin .7s linear infinite; margin:0 auto 12px; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+
+    /* TOAST */
+    #toast { position:fixed; bottom:24px; right:24px; background:var(--elevated); border:1px solid var(--border); border-radius:10px; padding:12px 18px; font-size:13px; font-weight:600; box-shadow:var(--shadow); z-index:9999; transform:translateY(80px); opacity:0; transition:all .3s; pointer-events:none; }
+    #toast.show { transform:translateY(0); opacity:1; }
+    #toast.ok  { border-color:rgba(34,197,94,.4); color:#86efac; }
+    #toast.err { border-color:rgba(220,38,38,.4); color:#fca5a5; }
+
+    .action-row { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+    @media(max-width:640px) { .body { padding:16px; } .tabs { padding:0 12px; } }
+  </style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="login-brand">
+      <div class="brand-icon">⚡</div>
+      <div>
+        <div class="brand-name">LeadForge</div>
+        <div class="brand-tag">Admin Portal</div>
+      </div>
+    </div>
+    <h2 class="login-title">Admin Sign In</h2>
+    <p class="login-sub">Only admin accounts can access this panel.</p>
+    <div class="login-error" id="loginError"></div>
+    <form onsubmit="doLogin(event)">
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input type="email" id="fEmail" class="form-input" placeholder="admin@example.com" required autocomplete="email" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <div class="pw-wrap">
+          <input type="password" id="fPass" class="form-input" placeholder="••••••••" required autocomplete="current-password" />
+          <button type="button" class="pw-eye" onclick="togglePw()" tabindex="-1">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+      </div>
+      <button type="submit" id="loginBtn" class="btn-login">Sign In as Admin</button>
+    </form>
+  </div>
+</div>
+
+<!-- ADMIN SHELL -->
+<div id="adminShell">
+  <div class="topbar">
+    <div class="topbar-l">
+      <div class="topbar-logo">⚡</div>
+      <span class="topbar-title">LeadForge</span>
+      <span class="topbar-badge">ADMIN</span>
+    </div>
+    <div class="topbar-r">
+      <span class="admin-email-lbl" id="topEmail"></span>
+      <button class="btn-out" onclick="doLogout()">Sign Out</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab on" onclick="go('overview',this)">📊 Overview</button>
+    <button class="tab"    onclick="go('users',this)">👥 Users</button>
+    <button class="tab"    onclick="go('activity',this)">📋 Activity</button>
+    <button class="tab"    onclick="go('sends',this)">✉️ Email Sends</button>
+  </div>
+
+  <div class="body">
+
+    <!-- OVERVIEW -->
+    <div class="panel on" id="p-overview">
+      <div class="stats" id="statsGrid">
+        <div class="loading"><div class="spinner"></div>Loading...</div>
+      </div>
+      <div class="card">
+        <div class="card-hd"><h2>Recent Users</h2><button class="btn-ref" onclick="loadOverview()">↺ Refresh</button></div>
+        <div class="tbl-wrap">
+          <table><thead><tr><th>Email</th><th>Name</th><th>Plan</th><th>Admin</th><th>Joined</th></tr></thead>
+          <tbody id="recentTbl"></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <!-- USERS -->
+    <div class="panel" id="p-users">
+      <div class="search-row">
+        <input class="search-inp" id="userQ" placeholder="Search email or name..." oninput="filterUsers(this.value)" />
+        <button class="btn-ref" onclick="loadUsers()">↺ Refresh</button>
+      </div>
+      <div class="card">
+        <div class="card-hd"><h2>All Users</h2><span id="uCount" class="badge b-muted">—</span></div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr>
+              <th>Email</th><th>Name</th><th>Plan</th><th>Admin</th>
+              <th>Daily Limit</th><th>Sent Today</th><th>Joined</th><th>Actions</th>
+            </tr></thead>
+            <tbody id="usersTbl"><tr><td colspan="8" class="loading"><div class="spinner"></div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ACTIVITY -->
+    <div class="panel" id="p-activity">
+      <div class="card">
+        <div class="card-hd"><h2>Platform Activity</h2><button class="btn-ref" onclick="loadActivity()">↺ Refresh</button></div>
+        <div id="actBody"><div class="loading"><div class="spinner"></div>Loading...</div></div>
+      </div>
+    </div>
+
+    <!-- SENDS -->
+    <div class="panel" id="p-sends">
+      <div class="card">
+        <div class="card-hd"><h2>Email Send History</h2><button class="btn-ref" onclick="loadSends()">↺ Refresh</button></div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>To</th><th>Subject</th><th>Status</th><th>Provider</th><th>Sent At</th></tr></thead>
+            <tbody id="sendsTbl"><tr><td colspan="5" class="loading">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── Config ─────────────────────────────────────────────────────────────
+const SB_URL  = 'https://lvmvimijhlxsnnmrjvie.supabase.co';
+const SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx2bXZpbWlqaGx4c25ubXJqdmllIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM1MDI4MDQsImV4cCI6MjA5OTA3ODgwNH0.GHZGJP5evc_K2csEaYJwdBlI0blQdV5XsS50W9EGMNM';
+const SB_SVC  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx2bXZpbWlqaGx4c25ubXJqdmllIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MzUwMjgwNCwiZXhwIjoyMDk5MDc4ODA0fQ.AYabwr68KglWliEZLzUYKbgVo8OsMtClkfQ7ntchQI4';
+
+// Two clients: anon for auth, service-role for admin queries (bypasses RLS)
+const db   = supabase.createClient(SB_URL, SB_ANON);   // login / verify
+const adm  = supabase.createClient(SB_URL, SB_SVC);    // admin queries
+
+let _allUsers = [];
+
+// ── Auth ────────────────────────────────────────────────────────────────
+async function doLogin(e) {
+  e.preventDefault();
+  const email = document.getElementById('fEmail').value.trim();
+  const pass  = document.getElementById('fPass').value;
+  const btn   = document.getElementById('loginBtn');
+  const errEl = document.getElementById('loginError');
+  errEl.style.display = 'none';
+  btn.disabled = true; btn.textContent = 'Signing in...';
+  try {
+    // 1. Sign in via Supabase Auth
+    const { data, error } = await db.auth.signInWithPassword({ email, password: pass });
+    if (error) throw new Error(error.message);
+
+    // 2. Check is_admin from profiles table (using service role to be safe)
+    const { data: profile, error: pErr } = await adm
+      .from('profiles').select('is_admin,plan,name').eq('id', data.user.id).single();
+    if (pErr || !profile) throw new Error('Could not load your profile. Try again.');
+    if (!profile.is_admin) throw new Error('Access denied — this account is not an admin.');
+
+    // 3. Show admin shell
+    showShell(email);
+  } catch (err) {
+    errEl.textContent = err.message; errEl.style.display = 'block';
+    btn.disabled = false; btn.textContent = 'Sign In as Admin';
+  }
+}
+
+async function doLogout() {
+  await db.auth.signOut();
+  document.getElementById('adminShell').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('loginBtn').disabled = false;
+  document.getElementById('loginBtn').textContent = 'Sign In as Admin';
+}
+
+function showShell(email) {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('adminShell').style.display  = 'block';
+  document.getElementById('topEmail').textContent = email;
+  loadOverview();
+  loadUsers();
+}
+
+function togglePw() {
+  const f = document.getElementById('fPass');
+  f.type = f.type === 'password' ? 'text' : 'password';
+}
+
+// Auto-restore session on page load
+db.auth.getSession().then(async ({ data }) => {
+  if (!data?.session) return;
+  const { data: p } = await adm.from('profiles').select('is_admin,email').eq('id', data.session.user.id).single();
+  if (p?.is_admin) showShell(data.session.user.email);
+});
+
+// ── Tabs ────────────────────────────────────────────────────────────────
+function go(name, btn) {
+  document.querySelectorAll('.tab').forEach(b => b.classList.remove('on'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('on'));
+  btn.classList.add('on');
+  document.getElementById('p-' + name).classList.add('on');
+  if (name === 'activity') loadActivity();
+  if (name === 'sends')    loadSends();
+}
+
+// ── Overview ────────────────────────────────────────────────────────────
+async function loadOverview() {
+  document.getElementById('statsGrid').innerHTML = '<div class="loading"><div class="spinner"></div>Loading...</div>';
+  try {
+    const [
+      { count: totalUsers },
+      { data: premUsers },
+      { count: totalSends },
+      { count: failSends },
+      { count: campaigns },
+      { count: leads },
+      { data: recent },
+    ] = await Promise.all([
+      adm.from('profiles').select('*', { count:'exact', head:true }),
+      adm.from('profiles').select('id').eq('plan','premium'),
+      adm.from('email_sends').select('*', { count:'exact', head:true }),
+      adm.from('email_sends').select('*', { count:'exact', head:true }).eq('status','failed'),
+      adm.from('campaigns').select('*', { count:'exact', head:true }),
+      adm.from('leads').select('*', { count:'exact', head:true }),
+      adm.from('profiles').select('email,name,plan,is_admin,created_at').order('created_at',{ascending:false}).limit(8),
+    ]);
+
+    document.getElementById('statsGrid').innerHTML = [
+      sc('👥','Total Users',   totalUsers||0,   'cb'),
+      sc('⭐','Premium',       (premUsers||[]).length, 'ca'),
+      sc('✉️','Emails Sent',   totalSends||0,   'cg'),
+      sc('❌','Failed Sends',  failSends||0,    'cr'),
+      sc('🔍','Campaigns',     campaigns||0,    'cb'),
+      sc('📋','Total Leads',   leads||0,        'cg'),
+    ].join('');
+
+    document.getElementById('recentTbl').innerHTML = (recent||[]).map(u => `
+      <tr>
+        <td style="font-weight:600">${E(u.email)}</td>
+        <td>${E(u.name||'—')}</td>
+        <td><span class="badge ${u.plan==='premium'?'b-amber':'b-muted'}">${u.plan||'free'}</span></td>
+        <td>${u.is_admin?'<span class="badge b-red">Admin</span>':'—'}</td>
+        <td style="color:var(--muted);font-size:12px">${D(u.created_at)}</td>
+      </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--muted)">No users yet</td></tr>';
+  } catch(err) {
+    document.getElementById('statsGrid').innerHTML = `<p style="color:#fca5a5;padding:20px">Error: ${E(err.message)}</p>`;
+  }
+}
+
+function sc(icon, label, val, cls) {
+  return `<div class="stat"><div style="font-size:20px;margin-bottom:8px">${icon}</div><div class="stat-n ${cls}">${val}</div><div class="stat-l">${label}</div></div>`;
+}
+
+// ── Users ────────────────────────────────────────────────────────────────
+async function loadUsers() {
+  document.getElementById('usersTbl').innerHTML = '<tr><td colspan="8" class="loading"><div class="spinner"></div></td></tr>';
+  try {
+    const { data, error } = await adm
+      .from('profiles')
+      .select('id,email,name,plan,is_admin,email_daily_limit,emails_sent_today,created_at')
+      .order('created_at', { ascending: false })
+      .limit(500);
+    if (error) throw error;
+    _allUsers = data || [];
+    document.getElementById('uCount').textContent = _allUsers.length + ' users';
+    renderUsers(_allUsers);
+  } catch(err) {
+    document.getElementById('usersTbl').innerHTML = `<tr><td colspan="8" style="color:#fca5a5;padding:20px">Error: ${E(err.message)}</td></tr>`;
+  }
+}
+
+function filterUsers(q) {
+  const lq = q.toLowerCase();
+  renderUsers(_allUsers.filter(u => (u.email||'').toLowerCase().includes(lq) || (u.name||'').toLowerCase().includes(lq)));
+}
+
+function renderUsers(list) {
+  document.getElementById('usersTbl').innerHTML = list.map(u => `
+    <tr>
+      <td style="font-weight:600;font-size:13px">${E(u.email)}</td>
+      <td>${E(u.name||'—')}</td>
+      <td><span class="badge ${u.plan==='premium'?'b-amber':'b-muted'}">${u.plan||'free'}</span></td>
+      <td>${u.is_admin?'<span class="badge b-red">✓ Admin</span>':'<span class="badge b-muted">User</span>'}</td>
+      <td>
+        <div class="action-row">
+          <input class="limit-inp" id="lim_${u.id}" type="number" value="${u.email_daily_limit||300}" min="0" max="99999" />
+          <button class="btn-xs ok" onclick="setLimit('${u.id}')">Set</button>
+        </div>
+      </td>
+      <td style="color:var(--muted)">${u.emails_sent_today||0}</td>
+      <td style="color:var(--muted);font-size:12px">${D(u.created_at)}</td>
+      <td>
+        <div class="action-row">
+          ${u.plan==='premium'
+            ? `<button class="btn-xs rm" onclick="setPlan('${u.id}','free')">→ Free</button>`
+            : `<button class="btn-xs ok" onclick="setPlan('${u.id}','premium')">→ Premium</button>`}
+          ${u.is_admin
+            ? `<button class="btn-xs rm" onclick="toggleAdmin('${u.id}',false)">Revoke Admin</button>`
+            : `<button class="btn-xs"    onclick="toggleAdmin('${u.id}',true)">Make Admin</button>`}
+        </div>
+      </td>
+    </tr>`).join('') || '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--muted)">No users found</td></tr>';
+}
+
+async function setPlan(uid, plan) {
+  try {
+    const { error } = await adm.from('profiles').update({ plan }).eq('id', uid);
+    if (error) throw error;
+    toast('Plan updated to ' + plan, true); loadUsers();
+  } catch(err) { toast(err.message, false); }
+}
+
+async function toggleAdmin(uid, grant) {
+  if (!confirm(grant ? 'Grant admin to this user?' : 'Remove admin access?')) return;
+  try {
+    const { error } = await adm.from('profiles').update({ is_admin: grant }).eq('id', uid);
+    if (error) throw error;
+    toast(grant ? 'Admin granted ✓' : 'Admin removed', true); loadUsers();
+  } catch(err) { toast(err.message, false); }
+}
+
+async function setLimit(uid) {
+  const val = parseInt(document.getElementById('lim_' + uid)?.value);
+  if (isNaN(val) || val < 0) { toast('Enter a valid number', false); return; }
+  try {
+    const { error } = await adm.from('profiles').update({ email_daily_limit: val }).eq('id', uid);
+    if (error) throw error;
+    toast('Daily limit set to ' + val + ' ✓', true); loadUsers();
+  } catch(err) { toast(err.message, false); }
+}
+
+// ── Activity ────────────────────────────────────────────────────────────
+async function loadActivity() {
+  document.getElementById('actBody').innerHTML = '<div class="loading"><div class="spinner"></div>Loading...</div>';
+  try {
+    const { data, error } = await adm
+      .from('activity_logs')
+      .select('action,user_id,metadata,created_at')
+      .order('created_at', { ascending: false })
+      .limit(60);
+    if (error) throw error;
+    const logs = data || [];
+    document.getElementById('actBody').innerHTML = logs.length
+      ? logs.map(l => `
+          <div class="act-row">
+            <div class="act-dot"></div>
+            <div>
+              <div class="act-action">${E(l.action||'event')}</div>
+              <div class="act-meta">
+                User: ${E((l.user_id||'').slice(0,8)+'...')}
+                ${l.metadata ? ' · ' + JSON.stringify(l.metadata).slice(0,80) : ''}
+                &nbsp;·&nbsp; ${D(l.created_at)}
+              </div>
+            </div>
+          </div>`).join('')
+      : '<div class="loading">No activity logged yet</div>';
+  } catch(err) {
+    document.getElementById('actBody').innerHTML = `<div class="loading" style="color:#fca5a5">Error: ${E(err.message)}</div>`;
+  }
+}
+
+// ── Email Sends ──────────────────────────────────────────────────────────
+async function loadSends() {
+  document.getElementById('sendsTbl').innerHTML = '<tr><td colspan="5" class="loading"><div class="spinner"></div></td></tr>';
+  try {
+    const { data, error } = await adm
+      .from('email_sends')
+      .select('to_email,subject,status,provider,sent_at')
+      .order('sent_at', { ascending: false })
+      .limit(100);
+    if (error) throw error;
+    const sends = data || [];
+    document.getElementById('sendsTbl').innerHTML = sends.length
+      ? sends.map(s => `
+          <tr>
+            <td style="font-size:12px">${E(s.to_email)}</td>
+            <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${E(s.subject||'—')}</td>
+            <td><span class="badge ${s.status==='sent'?'b-green':s.status==='failed'?'b-red':'b-muted'}">${s.status}</span></td>
+            <td style="color:var(--muted);font-size:12px">${E(s.provider||'system')}</td>
+            <td style="color:var(--muted);font-size:12px">${D(s.sent_at)}</td>
+          </tr>`).join('')
+      : '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--muted)">No sends yet</td></tr>';
+  } catch(err) {
+    document.getElementById('sendsTbl').innerHTML = `<tr><td colspan="5" style="color:#fca5a5;padding:20px">Error: ${E(err.message)}</td></tr>`;
+  }
+}
+
+// ── Utils ────────────────────────────────────────────────────────────────
+function E(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function D(ts) {
+  if (!ts) return '—';
+  try { return new Date(ts).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}); } catch { return '—'; }
+}
+
+let _tt;
+function toast(msg, ok) {
+  const el = document.getElementById('toast');
+  el.textContent = (ok ? '✓ ' : '✗ ') + msg;
+  el.className   = 'show ' + (ok ? 'ok' : 'err');
+  clearTimeout(_tt);
+  _tt = setTimeout(() => { el.className = ''; }, 3200);
+}
+</script>
+</body>
+</html>
