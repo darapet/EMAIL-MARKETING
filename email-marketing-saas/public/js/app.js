@@ -7,7 +7,8 @@
 // ═══════════════════════════════════════════════════
 // 1. GLOBAL STATE
 // ═══════════════════════════════════════════════════
-const App = {
+// var (not const) so window.App is set — other scripts access App by name
+var App = {
   currentPage: 'dashboard',
   wizardStep: 1,
   selectedChannels: new Set(['email', 'whatsapp', 'website']),

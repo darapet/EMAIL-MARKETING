@@ -37,8 +37,6 @@ function getEmailCount() {
 }
 
 // ── SCRAPED LEADS PREVIEW — Supabase direct ───────────────────────────────────
-App._scrapedCampaignId = null;
-
 function showScrapedPreview(campaignId, totalLeads) {
   App._scrapedCampaignId = campaignId;
   openModal('scrapedPreviewModal');

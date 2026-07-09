@@ -205,13 +205,13 @@ async function handleLogout() {
 // ── Auth overlay helpers ──────────────────────────────────────────────────────
 function showAuthOverlay(tab = 'login') {
   const overlay = document.getElementById('authOverlay');
-  if (overlay) overlay.classList.add('open');
+  if (overlay) overlay.classList.add('visible');
   switchAuthTab(tab);
 }
 
 function hideAuthOverlay() {
   const overlay = document.getElementById('authOverlay');
-  if (overlay) overlay.classList.remove('open');
+  if (overlay) overlay.classList.remove('visible');
 }
 
 function switchAuthTab(tab) {
