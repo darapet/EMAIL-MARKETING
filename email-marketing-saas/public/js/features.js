@@ -1,26 +1,19 @@
 /**
  * features.js — Extended features for LeadForge
- * Select All, AI Generate, Templates, Admin, Premium gates, Scraped preview
+ * Select All, AI Generate (Groq), Templates, Admin, Premium gates,
+ * Scraped preview, Schedule, Brevo slots — all via Supabase direct
  */
-
-// ── Supabase Backend URL ──────────────────────────────────────────────────────
-// Change this when you deploy your backend server
-const API_BASE = window.__LF_API_BASE || '';
 
 // ── SELECT ALL CHANNELS ───────────────────────────────────────────────────────
 function selectAllChannels() {
-  const all = document.querySelectorAll('.channel-checkbox');
+  const all        = document.querySelectorAll('.channel-checkbox');
   const anyUnchecked = [...all].some(l => !l.classList.contains('checked'));
   all.forEach(label => {
     const input = label.querySelector('input');
     if (anyUnchecked) {
-      input.checked = true;
-      label.classList.add('checked');
-      App.selectedChannels.add(input.value);
+      input.checked = true; label.classList.add('checked');    App.selectedChannels.add(input.value);
     } else {
-      input.checked = false;
-      label.classList.remove('checked');
-      App.selectedChannels.delete(input.value);
+      input.checked = false; label.classList.remove('checked'); App.selectedChannels.delete(input.value);
     }
   });
   document.getElementById('channelCount').textContent = App.selectedChannels.size;
@@ -43,13 +36,11 @@ function getEmailCount() {
   return el ? parseInt(el.value) || 50 : 50;
 }
 
-// ── SCRAPED LEADS PREVIEW (before sending) ────────────────────────────────────
-// Called after scrape completes — shows leads with checkboxes so user picks who to email
+// ── SCRAPED LEADS PREVIEW — Supabase direct ───────────────────────────────────
 App._scrapedCampaignId = null;
 
 function showScrapedPreview(campaignId, totalLeads) {
   App._scrapedCampaignId = campaignId;
-  // Navigate to preview modal
   openModal('scrapedPreviewModal');
   loadScrapedLeadsPreview(campaignId);
 }
@@ -57,43 +48,46 @@ function showScrapedPreview(campaignId, totalLeads) {
 async function loadScrapedLeadsPreview(campaignId) {
   const body = document.getElementById('scrapedPreviewBody');
   if (!body) return;
-  body.innerHTML = '<div class="loading-spinner">Loading scraped leads...</div>';
+  body.innerHTML = '<p style="text-align:center;padding:1rem">Loading scraped leads...</p>';
 
   try {
-    const data = await apiFetch(`${API_BASE}/api/campaigns/${campaignId}`);
-    const leads = data.leads || [];
+    const sb = getSupabase();
+    const { data: leads, error } = await sb
+      .from('leads')
+      .select('id, business_name, email, phone, social_urls')
+      .eq('campaign_id', campaignId);
 
-    if (!leads.length) {
-      body.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:40px">No leads found in this campaign.</p>';
+    if (error) throw error;
+    if (!leads?.length) {
+      body.innerHTML = '<p style="text-align:center;color:var(--text-muted)">No leads found in this campaign.</p>';
       return;
     }
 
     body.innerHTML = `
-      <div class="preview-toolbar">
-        <label class="checkbox-label" style="font-weight:600">
-          <input type="checkbox" id="selectAllScraped" onchange="toggleSelectAllScraped(this)" />
-          Select All (${leads.length} leads)
-        </label>
-        <span style="color:var(--text-muted);font-size:12px">${leads.filter(l=>l.email).length} with email · ${leads.filter(l=>l.phone).length} with phone</span>
+      <div style="margin-bottom:1rem;display:flex;align-items:center;gap:.5rem">
+        <input type="checkbox" id="selectAllScraped" onchange="toggleSelectAllScraped(this)">
+        <label for="selectAllScraped">Select All (${leads.length} leads)</label>
+        <span style="margin-left:auto;font-size:.85rem;color:var(--text-muted)">
+          ${leads.filter(l => l.email).length} with email · ${leads.filter(l => l.phone).length} with phone
+        </span>
       </div>
-      <div class="scraped-leads-list">
-        ${leads.map((lead, i) => `
-          <label class="scraped-lead-row ${!lead.email ? 'no-email' : ''}">
-            <input type="checkbox" class="scraped-cb" value="${lead.id}" ${lead.email ? 'checked' : ''} ${!lead.email ? 'disabled' : ''} />
-            <div class="lead-info">
-              <strong>${lead.business_name || 'Unknown Business'}</strong>
-              <span class="lead-email">${lead.email || '<em>no email</em>'}</span>
-            </div>
-            <div class="lead-meta">
-              ${lead.phone ? `<span class="badge badge-muted">📱 ${lead.phone}</span>` : ''}
-              ${lead.social_urls && Object.keys(lead.social_urls).length ? `<span class="badge badge-muted">🔗 socials</span>` : ''}
-            </div>
-          </label>
-        `).join('')}
+      ${leads.map(lead => `
+        <div class="lead-preview-row">
+          <input type="checkbox" class="scraped-cb" value="${esc(lead.id)}" ${lead.email ? '' : 'disabled'}>
+          <div>
+            <strong>${esc(lead.business_name || 'Unknown Business')}</strong>
+            ${lead.email ? `<a href="mailto:${esc(lead.email)}">${esc(lead.email)}</a>` : '<em style="color:var(--text-muted)">no email</em>'}
+            ${lead.phone ? `<span>📱 ${esc(lead.phone)}</span>` : ''}
+          </div>
+        </div>
+      `).join('')}
+      <div style="margin-top:1rem;display:flex;gap:.5rem;justify-content:flex-end">
+        <button class="btn btn-secondary" onclick="closeModal('scrapedPreviewModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="proceedToSendScraped()">Send Outreach →</button>
       </div>
     `;
   } catch (err) {
-    body.innerHTML = `<p style="color:var(--red);padding:20px">Error: ${err.message}</p>`;
+    body.innerHTML = `<p style="color:var(--danger)">Error: ${esc(err.message)}</p>`;
   }
 }
 
@@ -109,8 +103,7 @@ function proceedToSendScraped() {
   const leadIds = getSelectedScrapedLeads();
   if (!leadIds.length) { toast('Select at least one lead to email', 'warn'); return; }
   closeModal('scrapedPreviewModal');
-  // Pre-fill the outreach form
-  App._pendingLeadIds = leadIds;
+  App._pendingLeadIds   = leadIds;
   App._pendingCampaignId = App._scrapedCampaignId;
   navigateTo('outreach');
   const sel = document.getElementById('emailCampaignSelect');
@@ -118,25 +111,52 @@ function proceedToSendScraped() {
   toast(`${leadIds.length} leads selected for outreach`, 'success');
 }
 
-// ── AI GENERATE ───────────────────────────────────────────────────────────────
+// ── AI GENERATE — Groq API (browser-side, no backend needed) ──────────────────
+function getGroqKey() {
+  return App.userProfile.groq_key || App.userProfile.groqApiKey || '';
+}
+
 async function aiGenerateEmail() {
-  const niche    = document.getElementById('nicheInput')?.value ||
-                   document.getElementById('emailCampaignSelect')?.selectedOptions[0]?.text || 'Business';
-  const btn      = document.getElementById('aiGenerateBtn');
-  const toneEl   = document.getElementById('aiToneSelect');
-  const goalEl   = document.getElementById('aiGoalSelect');
-  const tone     = toneEl?.value || 'professional';
-  const goal     = goalEl?.value || 'service_offer';
+  const niche   = document.getElementById('nicheInput')?.value
+    || document.getElementById('emailCampaignSelect')?.selectedOptions[0]?.text
+    || 'Business';
+  const btn    = document.getElementById('aiGenerateBtn');
+  const tone   = document.getElementById('aiToneSelect')?.value  || 'professional';
+  const goal   = document.getElementById('aiGoalSelect')?.value  || 'service_offer';
+  const groqKey = getGroqKey();
+
+  if (!groqKey) { toast('Add your Groq API key in Settings → API Keys to use AI generation', 'warn'); return; }
 
   if (btn) { btn.disabled = true; btn.textContent = '✨ Generating...'; }
 
   try {
-    const res = await apiFetch(`${API_BASE}/api/ai/generate-email`, {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
-      body: JSON.stringify({ niche, tone, goal }),
+      headers: {
+        'Authorization': `Bearer ${groqKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'llama3-8b-8192',
+        messages: [
+          { role: 'system', content: 'You are an expert email marketing copywriter. Return only valid JSON with "subject" and "body" string fields. No markdown, no explanations.' },
+          { role: 'user',   content: `Write a ${tone} cold outreach email targeting a ${niche} business. Goal: ${goal}. Make it concise, personal, and compelling. Return JSON: {"subject":"...","body":"..."}` },
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.7,
+        max_tokens: 800,
+      }),
     });
-    if (res.subject) document.getElementById('emailSubject').value = res.subject;
-    if (res.body)    document.getElementById('emailBody').value    = res.body;
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error?.message || `HTTP ${res.status}`);
+    }
+
+    const data    = await res.json();
+    const content = JSON.parse(data.choices[0].message.content);
+    if (content.subject) document.getElementById('emailSubject').value = content.subject;
+    if (content.body)    document.getElementById('emailBody').value    = content.body;
     toast('AI draft generated!', 'success');
   } catch (err) {
     toast('AI generation failed: ' + err.message, 'error');
@@ -146,520 +166,557 @@ async function aiGenerateEmail() {
 }
 
 async function aiGenerateWA() {
-  const niche    = document.getElementById('broadcastCampaignSelect')?.selectedOptions[0]?.text || 'Business';
-  const btn      = document.getElementById('aiGenerateWABtn');
+  const niche   = document.getElementById('nicheInput')?.value || 'Business';
+  const btn     = document.getElementById('aiGenerateWaBtn');
+  const groqKey = getGroqKey();
+
+  if (!groqKey) { toast('Add your Groq API key in Settings → API Keys to use AI generation', 'warn'); return; }
 
   if (btn) { btn.disabled = true; btn.textContent = '✨ Generating...'; }
+
   try {
-    const res = await apiFetch(`${API_BASE}/api/ai/generate-whatsapp`, {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
-      body: JSON.stringify({ niche, tone: 'friendly' }),
+      headers: {
+        'Authorization': `Bearer ${groqKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'llama3-8b-8192',
+        messages: [
+          { role: 'system', content: 'You are a WhatsApp marketing expert. Write short, friendly WhatsApp messages. Return only valid JSON with a "message" string field.' },
+          { role: 'user',   content: `Write a WhatsApp cold outreach message targeting a ${niche} business. Keep it under 150 words, casual and friendly. Include a call to action. Return JSON: {"message":"..."}` },
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.7,
+        max_tokens: 400,
+      }),
     });
-    if (res.message) document.getElementById('waMessage').value = res.message;
-    toast('WA draft generated!', 'success');
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error?.message || `HTTP ${res.status}`);
+    }
+
+    const data    = await res.json();
+    const content = JSON.parse(data.choices[0].message.content);
+    if (content.message) document.getElementById('waMessage').value = content.message;
+    toast('AI message generated!', 'success');
   } catch (err) {
     toast('AI generation failed: ' + err.message, 'error');
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '✨ AI Generate'; }
+    if (btn) { btn.disabled = false; btn.textContent = '✨ AI Generate Message'; }
   }
 }
 
-// ── SMTP PROVIDER SELECTION ───────────────────────────────────────────────────
-function setEmailProvider(provider) {
-  App.emailProvider = provider;
-  document.querySelectorAll('.provider-btn').forEach(b => b.classList.toggle('active', b.dataset.provider === provider));
-  const providerBadge = document.getElementById('providerBadge');
-  const labels = { system: 'System SMTP (Brevo)', brevo: 'Your Brevo Key', sendgrid: 'Your SendGrid', mailgun: 'Your Mailgun', smtp: 'Custom SMTP' };
-  if (providerBadge) providerBadge.textContent = 'via ' + (labels[provider] || provider);
-
-  // Premium gate — own SMTP
-  if (provider !== 'system' && !App.isPremium) {
-    toast('Custom SMTP is a premium feature. Upgrade to use your own keys.', 'warn');
-    showPremiumModal();
-    setEmailProvider('system');
-  }
-}
-
-// ── EMAIL TEMPLATES ───────────────────────────────────────────────────────────
-let _templates = [];
+// ── EMAIL TEMPLATES — Supabase direct ────────────────────────────────────────
+let _editingTemplateId = null;
 
 async function loadTemplates() {
+  const sb  = getSupabase();
+  const uid = getCurrentUserId();
+  if (!sb || !uid) return;
+
+  const list = document.getElementById('templateList');
+  if (list) list.innerHTML = '<p style="color:var(--text-muted);padding:.5rem">Loading templates...</p>';
+
   try {
-    const data = await apiFetch(`${API_BASE}/api/templates`);
-    _templates = data.templates || [];
-    renderTemplatesList();
-    populateTemplateSelect();
+    const { data: templates, error } = await sb
+      .from('templates')
+      .select('*')
+      .eq('user_id', uid)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    if (!templates?.length) {
+      if (list) list.innerHTML = '<p style="color:var(--text-muted);padding:.5rem">No templates yet. Create one below.</p>';
+      return;
+    }
+
+    if (list) {
+      list.innerHTML = templates.map(t => `
+        <div class="template-card ${t.is_default ? 'is-default' : ''}" id="tmpl-${esc(t.id)}">
+          <div class="template-card-header">
+            <strong>${esc(t.name)}</strong>
+            ${t.is_default ? '<span class="badge">Default</span>' : ''}
+          </div>
+          <div class="template-card-sub">${esc(t.subject)}</div>
+          <div class="template-card-actions">
+            <button class="btn-link" onclick="editTemplate('${esc(t.id)}')">Edit</button>
+            ${!t.is_default ? `<button class="btn-link" onclick="setDefaultTemplate('${esc(t.id)}')">Set Default</button>` : ''}
+            <button class="btn-link danger" onclick="deleteTemplate('${esc(t.id)}')">Delete</button>
+          </div>
+        </div>
+      `).join('');
+    }
   } catch (err) {
-    console.error('Failed to load templates:', err);
+    if (list) list.innerHTML = `<p style="color:var(--danger)">Error loading templates: ${esc(err.message)}</p>`;
   }
 }
 
-function renderTemplatesList() {
-  const container = document.getElementById('templatesGrid');
-  if (!container) return;
+function editTemplate(id) {
+  const sb  = getSupabase();
+  const uid = getCurrentUserId();
+  if (!sb || !uid) return;
 
-  if (!_templates.length) {
-    container.innerHTML = `
-      <div class="empty-state-sm" style="grid-column:1/-1;padding:60px 20px">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:48px;height:48px;color:var(--text-muted)"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
-        <p style="color:var(--text-muted);margin-top:12px">No templates yet. Create your first one below.</p>
-      </div>
-    `;
-    return;
-  }
-
-  // esc() defined in app.js (loaded before features.js renders)
-  const e = typeof esc === 'function' ? esc : s => String(s ?? '').replace(/[<>"'&]/g, c => ({'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;','&':'&amp;'}[c]));
-  container.innerHTML = _templates.map(t => `
-    <div class="template-card ${t.is_default ? 'is-default' : ''}">
-      <div class="template-card-header">
-        <strong>${e(t.name)}</strong>
-        ${t.is_default ? '<span class="badge badge-success">Default</span>' : ''}
-      </div>
-      ${t.logo_url ? `<img src="${e(t.logo_url)}" class="template-logo" alt="logo" />` : ''}
-      <p class="template-subject">${e(t.subject || '—')}</p>
-      <p class="template-preview">${e((t.body || '').substring(0, 100))}...</p>
-      <div class="template-actions">
-        ${!t.is_default ? `<button class="btn btn-ghost btn-sm" onclick="setDefaultTemplate('${e(t.id)}')">Set Default</button>` : ''}
-        <button class="btn btn-ghost btn-sm" onclick="editTemplate('${e(t.id)}')">Edit</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteTemplate('${e(t.id)}')">Delete</button>
-      </div>
-    </div>
-  `).join('');
+  sb.from('templates').select('*').eq('id', id).eq('user_id', uid).single().then(({ data: t }) => {
+    if (!t) return;
+    _editingTemplateId = id;
+    const nm = document.getElementById('templateName');    if (nm) nm.value = t.name    || '';
+    const su = document.getElementById('templateSubject'); if (su) su.value = t.subject || '';
+    const bo = document.getElementById('templateBody');    if (bo) bo.value = t.body    || '';
+    const lo = document.getElementById('templateLogoUrl'); if (lo) lo.value = t.logo_url || '';
+    const si = document.getElementById('templateSigUrl');  if (si) si.value = t.signature_url || '';
+    const saveBtn = document.getElementById('saveTemplateBtn');
+    if (saveBtn) saveBtn.textContent = 'Update Template';
+  });
 }
 
-function populateTemplateSelect() {
-  const sel = document.getElementById('templateSelect');
-  if (!sel) return;
-  sel.innerHTML = '<option value="">No template (write custom)</option>' +
-    _templates.map(t => `<option value="${t.id}"${t.is_default?' selected':''}>${t.name}</option>`).join('');
+function clearTemplateForm() {
+  _editingTemplateId = null;
+  ['templateName','templateSubject','templateBody','templateLogoUrl','templateSigUrl'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  const saveBtn = document.getElementById('saveTemplateBtn');
+  if (saveBtn) saveBtn.textContent = 'Save Template';
 }
 
 async function saveTemplate() {
-  const name      = document.getElementById('tplName').value.trim();
-  const subject   = document.getElementById('tplSubject').value.trim();
-  const body      = document.getElementById('tplBody').value.trim();
-  const logoUrl   = document.getElementById('tplLogoUrl').value.trim();
-  const sigUrl    = document.getElementById('tplSignatureUrl').value.trim();
-  const editingId = document.getElementById('tplEditingId')?.value;
+  const sb  = getSupabase();
+  const uid = getCurrentUserId();
+  if (!sb || !uid) return;
 
-  if (!name || !subject || !body) { toast('Name, subject and body are required', 'warn'); return; }
-  if (_templates.length >= 5 && !editingId) { toast('Maximum 5 templates allowed', 'warn'); return; }
+  const payload = {
+    user_id:       uid,
+    name:          document.getElementById('templateName')?.value.trim()    || '',
+    subject:       document.getElementById('templateSubject')?.value.trim() || '',
+    body:          document.getElementById('templateBody')?.value.trim()    || '',
+    logo_url:      document.getElementById('templateLogoUrl')?.value.trim() || '',
+    signature_url: document.getElementById('templateSigUrl')?.value.trim()  || '',
+  };
+
+  if (!payload.name || !payload.subject) { toast('Template name and subject are required', 'warn'); return; }
 
   try {
-    const payload = { name, subject, body, logo_url: logoUrl, signature_url: sigUrl };
-    if (editingId) {
-      await apiFetch(`${API_BASE}/api/templates/${editingId}`, { method: 'PUT', body: JSON.stringify(payload) });
-      toast('Template updated', 'success');
+    if (_editingTemplateId) {
+      const { error } = await sb.from('templates').update(payload).eq('id', _editingTemplateId).eq('user_id', uid);
+      if (error) throw error;
+      toast('Template updated!', 'success');
     } else {
-      await apiFetch(`${API_BASE}/api/templates`, { method: 'POST', body: JSON.stringify(payload) });
-      toast('Template saved', 'success');
+      const { error } = await sb.from('templates').insert(payload);
+      if (error) throw error;
+      toast('Template saved!', 'success');
     }
     clearTemplateForm();
-    await loadTemplates();
+    loadTemplates();
   } catch (err) {
     toast('Error saving template: ' + err.message, 'error');
   }
 }
 
-function editTemplate(id) {
-  const t = _templates.find(t => t.id === id);
-  if (!t) return;
-  document.getElementById('tplName').value      = t.name;
-  document.getElementById('tplSubject').value   = t.subject || '';
-  document.getElementById('tplBody').value      = t.body || '';
-  document.getElementById('tplLogoUrl').value   = t.logo_url || '';
-  document.getElementById('tplSignatureUrl').value = t.signature_url || '';
-  const eid = document.getElementById('tplEditingId');
-  if (eid) eid.value = id;
-  document.getElementById('tplFormTitle').textContent = 'Edit Template';
-  document.getElementById('tplForm').scrollIntoView({ behavior: 'smooth' });
-}
-
-function clearTemplateForm() {
-  ['tplName','tplSubject','tplBody','tplLogoUrl','tplSignatureUrl'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.value = '';
-  });
-  const eid = document.getElementById('tplEditingId');
-  if (eid) eid.value = '';
-  const title = document.getElementById('tplFormTitle');
-  if (title) title.textContent = 'New Template';
-}
-
 async function deleteTemplate(id) {
   if (!confirm('Delete this template?')) return;
+  const sb  = getSupabase();
+  const uid = getCurrentUserId();
+  if (!sb || !uid) return;
+
   try {
-    await apiFetch(`${API_BASE}/api/templates/${id}`, { method: 'DELETE' });
+    const { error } = await sb.from('templates').delete().eq('id', id).eq('user_id', uid);
+    if (error) throw error;
     toast('Template deleted', 'success');
-    await loadTemplates();
+    loadTemplates();
   } catch (err) {
     toast('Error: ' + err.message, 'error');
   }
 }
 
 async function setDefaultTemplate(id) {
+  const sb  = getSupabase();
+  const uid = getCurrentUserId();
+  if (!sb || !uid) return;
+
   try {
-    await apiFetch(`${API_BASE}/api/templates/${id}/default`, { method: 'PUT' });
-    toast('Default template set', 'success');
-    await loadTemplates();
+    // Clear existing default
+    await sb.from('templates').update({ is_default: false }).eq('user_id', uid).eq('is_default', true);
+    // Set new default
+    await sb.from('templates').update({ is_default: true }).eq('id', id).eq('user_id', uid);
+    toast('Default template set!', 'success');
+    loadTemplates();
   } catch (err) {
     toast('Error: ' + err.message, 'error');
   }
 }
 
-function loadTemplateIntoComposer(templateId) {
-  const t = _templates.find(t => t.id === templateId);
-  if (!t) return;
-  if (t.subject) document.getElementById('emailSubject').value = t.subject;
-  if (t.body)    document.getElementById('emailBody').value    = t.body;
-  toast(`Template "${t.name}" loaded`, 'info');
-}
-
-// ── ADMIN PANEL ───────────────────────────────────────────────────────────────
+// ── ADMIN DASHBOARD — Supabase direct ────────────────────────────────────────
 async function loadAdminDashboard() {
+  if (!App.isAdmin) return;
+
   try {
-    const [stats, users] = await Promise.all([
-      apiFetch(`${API_BASE}/api/admin/stats`),
-      apiFetch(`${API_BASE}/api/admin/users`),
+    const sb = getSupabase();
+
+    // Run all queries in parallel
+    const [usersRes, campaignsRes, leadsRes] = await Promise.all([
+      sb.from('profiles').select('id, plan', { count: 'exact' }),
+      sb.from('campaigns').select('id', { count: 'exact' }),
+      sb.from('leads').select('id', { count: 'exact' }),
     ]);
-    renderAdminStats(stats);
-    renderAdminUsers(users.users || []);
+
+    const totalUsers    = usersRes.count   || 0;
+    const premiumUsers  = (usersRes.data   || []).filter(u => u.plan === 'premium').length;
+    const totalCampaigns = campaignsRes.count || 0;
+
+    const selectors = {
+      '.admin-stat-users':    totalUsers,
+      '.admin-stat-premium':  premiumUsers,
+      '.admin-stat-campaigns': totalCampaigns,
+      '.admin-stat-emails':   '—',
+    };
+    Object.entries(selectors).forEach(([sel, val]) => {
+      const el = document.querySelector(sel); if (el) el.textContent = val;
+    });
+
+    loadAdminUsers();
   } catch (err) {
-    if (err.message.includes('403')) {
-      toast('Admin access required', 'error');
-      navigateTo('dashboard');
-    }
+    console.error('Admin dashboard error:', err);
   }
 }
 
-function renderAdminStats(stats) {
-  const s = stats.stats || stats;
-  document.getElementById('adminStatUsers').textContent    = s.total_users || 0;
-  document.getElementById('adminStatPremium').textContent  = s.premium_users || 0;
-  document.getElementById('adminStatCampaigns').textContent = s.total_campaigns || 0;
-  document.getElementById('adminStatEmails').textContent   = s.total_emails_sent || 0;
-}
+async function loadAdminUsers() {
+  const sb  = getSupabase();
+  const uid = getCurrentUserId();
+  if (!sb) return;
 
-function renderAdminUsers(users) {
   const tbody = document.getElementById('adminUsersBody');
   if (!tbody) return;
-  if (!users.length) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:20px">No users yet</td></tr>';
-    return;
-  }
-  const e2 = typeof esc === 'function' ? esc : s => String(s ?? '').replace(/[<>"'&]/g, c => ({'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;','&':'&amp;'}[c]));
-  tbody.innerHTML = users.map(u => `
-    <tr>
-      <td><strong>${e2(u.name || (u.email || '').split('@')[0])}</strong><br><small style="color:var(--text-muted)">${e2(u.email || '')}</small></td>
-      <td><span class="badge ${u.plan === 'premium' ? 'badge-success' : 'badge-muted'}">${e2(u.plan || 'free')}</span></td>
-      <td>${u.is_admin ? '<span class="badge badge-warn">Admin</span>' : '—'}</td>
-      <td style="color:var(--text-muted);font-size:12px">${u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}</td>
-      <td>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button class="btn btn-sm btn-ghost" onclick="adminTogglePlan('${e2(u.id)}','${e2(u.plan || '')}')">
-            ${u.plan === 'premium' ? 'Downgrade' : '⬆ Upgrade'}
+  tbody.innerHTML = '<tr><td colspan="5">Loading...</td></tr>';
+
+  try {
+    const { data: users, error } = await sb
+      .from('profiles')
+      .select('id, name, email, plan, is_admin, created_at')
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    if (error) throw error;
+
+    tbody.innerHTML = (users || []).map(u => `
+      <tr>
+        <td>${esc(u.name || u.email || u.id)}<br><small style="color:var(--text-muted)">${esc(u.email || '')}</small></td>
+        <td><span class="badge">${esc(u.plan || 'free')}</span></td>
+        <td>${u.is_admin ? '✓ Admin' : '—'}</td>
+        <td>${formatDate(u.created_at)}</td>
+        <td>
+          <button class="btn-icon" onclick="updateUserPlan('${esc(u.id)}', '${u.plan === 'premium' ? 'free' : 'premium'}')">
+            ${u.plan === 'premium' ? 'Downgrade' : 'Upgrade'}
           </button>
-          ${!u.is_admin ? `<button class="btn btn-sm btn-ghost" onclick="adminToggleAdmin('${e2(u.id)}')">Make Admin</button>` : ''}
-        </div>
-      </td>
-    </tr>
-  `).join('');
+          <button class="btn-icon" onclick="toggleUserAdmin('${esc(u.id)}', ${!u.is_admin})">
+            ${u.is_admin ? 'Remove Admin' : 'Make Admin'}
+          </button>
+        </td>
+      </tr>
+    `).join('');
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="5" style="color:var(--danger)">Error: ${esc(err.message)}</td></tr>`;
+  }
 }
 
-async function adminTogglePlan(userId, currentPlan) {
-  const newPlan = currentPlan === 'premium' ? 'free' : 'premium';
+async function updateUserPlan(userId, newPlan) {
+  const sb = getSupabase();
+  if (!sb) return;
   try {
-    await apiFetch(`${API_BASE}/api/admin/users/${userId}/plan`, {
-      method: 'PUT',
-      body: JSON.stringify({ plan: newPlan }),
-    });
-    toast(`User plan set to ${newPlan}`, 'success');
-    loadAdminDashboard();
+    const { error } = await sb.from('profiles').update({ plan: newPlan }).eq('id', userId);
+    if (error) throw error;
+    toast(`User plan updated to ${newPlan}`, 'success');
+    loadAdminUsers();
   } catch (err) {
     toast('Error: ' + err.message, 'error');
   }
 }
 
-async function adminToggleAdmin(userId) {
+async function toggleUserAdmin(userId, isAdmin) {
+  const sb = getSupabase();
+  if (!sb) return;
   try {
-    await apiFetch(`${API_BASE}/api/admin/users/${userId}/admin`, {
-      method: 'PUT',
-      body: JSON.stringify({ is_admin: true }),
-    });
-    toast('Admin access granted', 'success');
-    loadAdminDashboard();
+    const { error } = await sb.from('profiles').update({ is_admin: isAdmin }).eq('id', userId);
+    if (error) throw error;
+    toast(`Admin status ${isAdmin ? 'granted' : 'revoked'}`, 'success');
+    loadAdminUsers();
   } catch (err) {
     toast('Error: ' + err.message, 'error');
   }
 }
 
 async function loadAdminActivity() {
+  const sb = getSupabase();
+  if (!sb) return;
+
+  const tbody = document.getElementById('adminActivityBody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="4">Loading...</td></tr>';
+
   try {
-    const data = await apiFetch(`${API_BASE}/api/admin/activity?limit=50`);
-    const logs = data.logs || [];
-    const tbody = document.getElementById('adminActivityBody');
-    if (!tbody) return;
-    if (!logs.length) {
-      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:20px">No activity yet</td></tr>';
+    const { data: logs, error } = await sb
+      .from('activity_logs')
+      .select('created_at, user_id, action, details')
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (error) throw error;
+
+    tbody.innerHTML = (logs || []).map(l => `
+      <tr>
+        <td>${formatDate(l.created_at)}</td>
+        <td>${esc(l.user_id?.slice(0, 8) || '—')}…</td>
+        <td>${esc(l.action || '—')}</td>
+        <td>${esc(typeof l.details === 'object' ? JSON.stringify(l.details) : l.details || '—')}</td>
+      </tr>
+    `).join('') || '<tr><td colspan="4" style="text-align:center">No activity yet</td></tr>';
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="4">Activity log not available</td></tr>`;
+  }
+}
+
+// ── PROFILE SETTINGS (settings page load) — Supabase direct ──────────────────
+async function loadProfileSettings() {
+  const sb  = getSupabase();
+  const uid = getCurrentUserId();
+  if (!sb || !uid) return;
+
+  try {
+    const { data: profile, error } = await sb
+      .from('profiles')
+      .select('*')
+      .eq('id', uid)
+      .single();
+
+    if (error || !profile) return;
+
+    // Merge into App state
+    Object.assign(App.userProfile, profile);
+    localStorage.setItem('lf_profile', JSON.stringify(App.userProfile));
+    loadProfileIntoForm();
+  } catch (err) {
+    console.warn('Could not load profile settings:', err.message);
+  }
+}
+
+// ── AUTOMATION / SCHEDULE — Supabase direct ───────────────────────────────────
+async function loadSchedules() {
+  const sb  = getSupabase();
+  const uid = getCurrentUserId();
+  if (!sb || !uid) return;
+
+  const tbody = document.getElementById('scheduleList') || document.getElementById('scheduleBody');
+  if (!tbody) return;
+  tbody.innerHTML = '<p style="color:var(--text-muted)">Loading...</p>';
+
+  try {
+    const { data: schedules, error } = await sb
+      .from('schedules')
+      .select('*, campaigns(name, niche)')
+      .eq('user_id', uid)
+      .order('send_at', { ascending: true });
+
+    if (error) throw error;
+
+    if (!schedules?.length) {
+      tbody.innerHTML = '<p style="color:var(--text-muted)">No scheduled sends yet.</p>';
       return;
     }
-    const e3 = typeof esc === 'function' ? esc : s => String(s ?? '').replace(/[<>"'&]/g, c => ({'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;','&':'&amp;'}[c]));
-    tbody.innerHTML = logs.map(l => `
-      <tr>
-        <td style="font-size:12px;color:var(--text-muted)">${l.created_at ? new Date(l.created_at).toLocaleString() : '—'}</td>
-        <td>${e3(l.profiles?.email || (l.user_id || '').substring(0,8))}</td>
-        <td><code style="font-size:11px">${e3(l.action || '')}</code></td>
-        <td style="font-size:11px;color:var(--text-muted)">${e3(l.metadata ? JSON.stringify(l.metadata).substring(0,60) : '—')}</td>
-      </tr>
+
+    tbody.innerHTML = schedules.map(s => `
+      <div class="schedule-row">
+        <div>
+          <strong>${esc(s.type === 'email' ? '✉ Email' : '📱 WhatsApp')}</strong>
+          — ${esc(s.campaigns?.niche || s.campaign_id || '—')}
+        </div>
+        <div>${formatDate(s.send_at)}</div>
+        <div><span class="badge badge-${s.status || 'pending'}">${esc(s.status || 'pending')}</span></div>
+        <div>${esc(s.subject || s.message?.slice(0, 40) || '—')}</div>
+        <div>
+          <button class="btn-icon danger" onclick="deleteSchedule('${esc(s.id)}')">✕ Remove</button>
+        </div>
+      </div>
     `).join('');
   } catch (err) {
-    toast('Failed to load activity', 'error');
+    tbody.innerHTML = `<p style="color:var(--danger)">Error: ${esc(err.message)}</p>`;
   }
 }
 
-// ── UPLOAD LOGO/SIGNATURE ─────────────────────────────────────────────────────
-async function uploadFile(inputId, type) {
-  const input = document.getElementById(inputId);
-  if (!input?.files?.[0]) return;
-  const file     = input.files[0];
-  const formData = new FormData();
-  formData.append('file', file);
+async function deleteSchedule(id) {
+  if (!confirm('Remove this scheduled send?')) return;
+  const sb  = getSupabase();
+  const uid = getCurrentUserId();
+  if (!sb || !uid) return;
 
   try {
-    const token = getAuthToken();
-    const res   = await fetch(`${API_BASE}/api/storage/upload/${type}`, {
-      method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      body: formData,
-    });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || 'Upload failed');
-    toast(`${type} uploaded!`, 'success');
-    return json.url;
+    const { error } = await sb.from('schedules').delete().eq('id', id).eq('user_id', uid);
+    if (error) throw error;
+    toast('Schedule removed', 'success');
+    loadSchedules();
   } catch (err) {
-    toast('Upload error: ' + err.message, 'error');
-    return null;
+    toast('Error: ' + err.message, 'error');
   }
 }
 
-// ── PREMIUM GATE MODAL ────────────────────────────────────────────────────────
-function showPremiumModal() {
-  document.getElementById('premiumModal')?.classList.add('open');
-}
+async function addSchedule() {
+  const sb  = getSupabase();
+  const uid = getCurrentUserId();
+  if (!sb || !uid) return;
 
-// ── Register auth hook via global hook array ──────────────────────────────────
-// app.js (loaded after this file) owns onAuthReady and drains _lfAuthHooks.
-// This avoids any wrapper-override race condition.
-window._lfAuthHooks = window._lfAuthHooks || [];
-window._lfAuthHooks.push(async function(user) {
-  App.isPremium = App.isPremium || false;
-  App.isAdmin   = App.isAdmin   || false;
-  App.emailProvider = 'system';
+  const campaignId = document.getElementById('scheduleCampaignSelect')?.value;
+  const type       = document.getElementById('scheduleType')?.value       || 'email';
+  const sendAt     = document.getElementById('scheduleSendAt')?.value;
+  const subject    = document.getElementById('scheduleSubject')?.value?.trim();
+  const message    = document.getElementById('scheduleMessage')?.value?.trim();
 
-  // Fetch fresh profile from API to get plan/admin status
-  try {
-    const profile = await apiFetch(`${API_BASE}/api/user/profile`);
-    if (profile?.profile) {
-      App.isPremium = profile.profile.plan === 'premium' || profile.profile.is_admin;
-      App.isAdmin   = profile.profile.is_admin || false;
-      App.userProfile = { ...App.userProfile, ...profile.profile };
-      // Show admin nav
-      if (App.isAdmin) {
-        const adminNav = document.getElementById('adminNavItem');
-        if (adminNav) adminNav.style.display = 'flex';
-      }
-      // Update plan badge
-      const planEl = document.querySelector('.user-plan');
-      if (planEl) {
-        const plan = profile.profile.plan || 'free';
-        planEl.textContent = plan.charAt(0).toUpperCase() + plan.slice(1) + ' Plan';
-      }
-    }
-  } catch {}
-
-  // Load templates on startup
-  loadTemplates();
-});
-
-
-
-// ════════════════════════════════════════════════════════
-// AUTOMATION / SCHEDULING
-// ════════════════════════════════════════════════════════
-
-let _scheduleType = 'email';
-
-function setScheduleType(type) {
-  _scheduleType = type;
-  document.querySelectorAll('.schedule-type-btn').forEach(function(b) {
-    b.classList.toggle('active', b.dataset.type === type);
-  });
-  const subjGroup = document.getElementById('schedSubjectGroup');
-  if (subjGroup) subjGroup.style.display = type === 'email' ? '' : 'none';
-}
-
-async function loadScheduledSends() {
-  try {
-    const data = await apiFetch(API_BASE + '/api/schedule');
-    const list  = document.getElementById('scheduledList');
-    if (!list) return;
-    const items = data.scheduled || [];
-    if (!items.length) {
-      list.innerHTML = '<div class="empty-schedule"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><p>No scheduled sends yet. Create one above!</p></div>';
-      return;
-    }
-    list.innerHTML = items.map(function(s) {
-      const dt          = new Date(s.scheduled_at).toLocaleString();
-      const icon        = s.type === 'whatsapp' ? '📱' : '✉️';
-      const statusColor = s.status === 'pending' ? 'var(--amber)' : s.status === 'sent' ? 'var(--emerald)' : 'var(--red)';
-      const cancelBtn   = s.status === 'pending'
-        ? '<button class="btn btn-ghost btn-sm" data-sid="' + s.id + '" onclick="cancelSchedule(this.dataset.sid)">Cancel</button>'
-        : '';
-      return '<div class="schedule-card">' +
-          '<div class="schedule-card-info">' +
-            '<h4>' + icon + ' ' + (s.subject || s.type.toUpperCase()) + ' <span style="font-size:11px;color:' + statusColor + ';font-weight:600;margin-left:6px">' + s.status + '</span></h4>' +
-            '<p>' + ((s.body || '').slice(0, 80)) + '...</p>' +
-          '</div>' +
-          '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0">' +
-            '<span class="schedule-time-badge">' + dt + '</span>' +
-            cancelBtn +
-          '</div>' +
-        '</div>';
-    }).join('');
-  } catch(e) { console.warn('Schedule load error:', e.message); }
-}
-
-async function cancelSchedule(id) {
-  if (!confirm('Cancel this scheduled send?')) return;
-  try {
-    await apiFetch(API_BASE + '/api/schedule/' + id, { method: 'DELETE' });
-    toast('Scheduled send cancelled', 'success');
-    loadScheduledSends();
-  } catch(e) { toast('Error: ' + e.message, 'error'); }
-}
-
-async function createScheduledSend() {
-  const schedAt    = document.getElementById('schedDateTime') ? document.getElementById('schedDateTime').value : '';
-  const body       = document.getElementById('schedBody')     ? document.getElementById('schedBody').value.trim()    : '';
-  const subject    = document.getElementById('schedSubject')  ? document.getElementById('schedSubject').value.trim() : '';
-  const campEl     = document.getElementById('schedCampaign');
-  const campaignId = campEl ? campEl.value : null;
-
-  if (!schedAt) { toast('Please set a date and time', 'warn'); return; }
-  if (!body)    { toast('Message body is required', 'warn');   return; }
-  if (_scheduleType === 'email' && !subject) { toast('Subject is required for email', 'warn'); return; }
-
-  const schedDate = new Date(schedAt);
-  if (schedDate <= new Date()) { toast('Scheduled time must be in the future', 'warn'); return; }
+  if (!campaignId || !sendAt) { toast('Select a campaign and send time', 'warn'); return; }
+  if (!message && !subject)   { toast('Enter a subject or message', 'warn'); return; }
 
   try {
-    await apiFetch(API_BASE + '/api/schedule', {
-      method: 'POST',
-      body: JSON.stringify({ type: _scheduleType, scheduled_at: schedDate.toISOString(), campaignId: campaignId, subject: subject, body: body })
+    const { error } = await sb.from('schedules').insert({
+      user_id:     uid,
+      campaign_id: campaignId,
+      type,
+      send_at:     new Date(sendAt).toISOString(),
+      subject:     subject || '',
+      message:     message || '',
+      status:      'pending',
     });
-    toast('Send scheduled!', 'success');
-    ['schedDateTime','schedBody','schedSubject'].forEach(function(id) {
-      const el = document.getElementById(id);
-      if (el) el.value = '';
-    });
-    loadScheduledSends();
-  } catch(e) { toast('Error: ' + e.message, 'error'); }
+    if (error) throw error;
+    toast('Scheduled!', 'success');
+    loadSchedules();
+  } catch (err) {
+    toast('Error scheduling: ' + err.message, 'error');
+  }
 }
 
-async function loadCampaignsForSchedule() {
-  try {
-    const data = await apiFetch(API_BASE + '/api/campaigns');
-    const sel  = document.getElementById('schedCampaign');
-    if (!sel) return;
-    const camps = data.campaigns || [];
-    sel.innerHTML = '<option value="">All leads (no specific campaign)</option>' +
-      camps.map(function(c) {
-        return '<option value="' + c.id + '">' + (c.name || c.niche) + '</option>';
-      }).join('');
-  } catch(e) {}
+function populateScheduleCampaignSelect() {
+  const sel = document.getElementById('scheduleCampaignSelect');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Choose campaign...</option>' +
+    App.campaigns.map(c => `<option value="${esc(c.id)}">${esc(c.niche)} (${c.leadsCount || 0} leads)</option>`).join('');
 }
 
-// ════════════════════════════════════════════════════════
-// FILE UPLOAD helpers (brand logo & signature)
-// ════════════════════════════════════════════════════════
-
-async function handleBrandFileUpload(inputEl, type) {
-  const file = inputEl.files && inputEl.files[0];
-  if (!file) return;
-  const nameEl = document.getElementById(type === 'logo' ? 'brandLogoName' : 'brandSigName');
-  if (nameEl) nameEl.textContent = file.name;
-  try {
-    const formData = new FormData();
-    formData.append('file', file);
-    const res  = await fetch(API_BASE + '/api/storage/upload/' + type, {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + getAuthToken() },
-      body: formData,
-    });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || 'Upload failed');
-    const urlEl = document.getElementById(type === 'logo' ? 'brandLogoUrl' : 'brandSigUrl');
-    if (urlEl) urlEl.value = json.url;
-    if (type === 'logo') previewLogo(json.url);
-    if (type === 'signature') {
-      const prev = document.getElementById('sigPreview');
-      if (prev) prev.innerHTML = '<img src="' + json.url + '" alt="Signature" style="width:100%;height:100%;object-fit:contain" />';
-    }
-    toast(type.charAt(0).toUpperCase() + type.slice(1) + ' uploaded!', 'success');
-  } catch(err) { toast('Upload error: ' + err.message, 'error'); }
-}
-
-// ════════════════════════════════════════════════════════
-// 5 BREVO SLOTS UI
-// ════════════════════════════════════════════════════════
+// ── BREVO MULTI-SLOT MANAGEMENT — Supabase direct ────────────────────────────
+// Brevo slots are stored as JSONB in profiles.brevo_slots:
+// [{ index: 0, key: "xkeysib-...", label: "Main", has_key: true }, ...]
 
 async function loadBrevoSlots() {
+  const sb  = getSupabase();
+  const uid = getCurrentUserId();
+  if (!sb || !uid) return;
+
   const grid = document.getElementById('brevoSlotsGrid');
   if (!grid) return;
+
   try {
-    const data  = await apiFetch(API_BASE + '/api/user/brevo-slots');
-    const slots = data.slots || [];
-    while (slots.length < 5) slots.push({ index: slots.length, label: 'Slot ' + (slots.length + 1), has_key: false, sent_today: 0 });
-    grid.innerHTML = slots.map(function(s) {
-      const statusClass = s.has_key ? 'active' : 'empty';
-      const statusText  = s.has_key ? '✓ Active' : 'Empty';
-      const clearBtn    = s.has_key ? '<button class="btn btn-ghost btn-sm" onclick="clearBrevoSlot(' + s.index + ')">✕</button>' : '';
-      return '<div class="brevo-slot-row">' +
-        '<span class="brevo-slot-label">Slot ' + (s.index + 1) + '</span>' +
-        '<input type="password" class="form-input" id="brevoSlot' + s.index + '" placeholder="xkeysib-..." />' +
-        '<input type="text" class="form-input" style="max-width:120px" id="brevoSlotLabel' + s.index + '" placeholder="Label" value="' + (s.label || '') + '" />' +
-        '<span class="brevo-slot-status ' + statusClass + '">' + statusText + '</span>' +
-        '<button class="btn btn-ghost btn-sm" onclick="saveBrevoSlot(' + s.index + ')">Save</button>' +
-        clearBtn +
-      '</div>';
-    }).join('');
-  } catch(e) {
+    const { data: profile, error } = await sb
+      .from('profiles')
+      .select('brevo_slots, plan')
+      .eq('id', uid)
+      .single();
+
+    if (error) throw error;
+
+    const isPremium = profile?.plan === 'premium' || App.isAdmin;
+    if (!isPremium) {
+      grid.innerHTML = '<p style="color:var(--text-muted)">Premium feature — upgrade to manage multiple Brevo slots.</p>';
+      return;
+    }
+
+    // Normalise to 5 slots
+    const savedSlots = profile?.brevo_slots || [];
+    const slots = Array.from({ length: 5 }, (_, i) => {
+      const saved = savedSlots.find(s => s.index === i) || {};
+      return { index: i, key: '', label: '', ...saved, has_key: !!(saved.key) };
+    });
+
+    grid.innerHTML = slots.map(s => `
+      <div class="brevo-slot ${s.has_key ? 'active' : 'empty'}">
+        <div class="brevo-slot-header">
+          <span>Slot ${s.index + 1}</span>
+          <span class="badge ${s.has_key ? 'badge-success' : ''}">${s.has_key ? '✓ Active' : 'Empty'}</span>
+        </div>
+        <input id="brevoSlotLabel${s.index}" type="text"  placeholder="Label (e.g. Main)" value="${esc(s.label || '')}">
+        <input id="brevoSlot${s.index}"      type="password" placeholder="Brevo API key" value="${esc(s.key || '')}">
+        <div style="display:flex;gap:.5rem;margin-top:.5rem">
+          <button class="btn btn-primary btn-sm" onclick="saveBrevoSlot(${s.index})">Save</button>
+          ${s.has_key ? `<button class="btn btn-secondary btn-sm" onclick="clearBrevoSlot(${s.index})">✕ Clear</button>` : ''}
+        </div>
+      </div>
+    `).join('');
+  } catch (err) {
     if (grid) grid.innerHTML = '<p style="color:var(--text-muted)">Premium feature — upgrade to manage slots.</p>';
   }
 }
 
 async function saveBrevoSlot(idx) {
-  const keyEl   = document.getElementById('brevoSlot'      + idx);
-  const labelEl = document.getElementById('brevoSlotLabel' + idx);
+  const keyEl   = document.getElementById(`brevoSlot${idx}`);
+  const labelEl = document.getElementById(`brevoSlotLabel${idx}`);
   const key     = keyEl   ? keyEl.value.trim()   : '';
-  const label   = labelEl ? labelEl.value.trim()  : '';
-  if (!key) { toast('Enter an API key for slot ' + (idx + 1), 'warn'); return; }
+  const label   = labelEl ? labelEl.value.trim() : '';
+  if (!key) { toast(`Enter an API key for slot ${idx + 1}`, 'warn'); return; }
+
+  const sb  = getSupabase();
+  const uid = getCurrentUserId();
+  if (!sb || !uid) return;
+
   try {
-    await apiFetch(API_BASE + '/api/user/brevo-slots/' + idx, {
-      method: 'PUT',
-      body: JSON.stringify({ key: key, label: label })
-    });
-    toast('Brevo slot ' + (idx + 1) + ' saved!', 'success');
+    // Read current slots, update the one at idx, write back
+    const { data: profile } = await sb.from('profiles').select('brevo_slots').eq('id', uid).single();
+    const slots = profile?.brevo_slots || [];
+    const existing = slots.findIndex(s => s.index === idx);
+    const updated  = { index: idx, key, label, has_key: true };
+    if (existing >= 0) slots[existing] = updated;
+    else slots.push(updated);
+
+    const { error } = await sb.from('profiles').update({ brevo_slots: slots }).eq('id', uid);
+    if (error) throw error;
+
+    // Update local profile cache
+    App.userProfile.brevo_slots = slots;
+    if (idx === 0) App.userProfile.brevo_key = key; // keep primary key in sync
+    localStorage.setItem('lf_profile', JSON.stringify(App.userProfile));
+
+    toast(`Brevo slot ${idx + 1} saved!`, 'success');
     loadBrevoSlots();
-  } catch(e) { toast('Error: ' + e.message, 'error'); }
+  } catch (err) {
+    toast('Error: ' + err.message, 'error');
+  }
 }
 
 async function clearBrevoSlot(idx) {
-  if (!confirm('Clear Brevo slot ' + (idx + 1) + '?')) return;
+  if (!confirm(`Clear Brevo slot ${idx + 1}?`)) return;
+
+  const sb  = getSupabase();
+  const uid = getCurrentUserId();
+  if (!sb || !uid) return;
+
   try {
-    await apiFetch(API_BASE + '/api/user/brevo-slots/' + idx, { method: 'DELETE' });
+    const { data: profile } = await sb.from('profiles').select('brevo_slots').eq('id', uid).single();
+    const slots   = (profile?.brevo_slots || []).filter(s => s.index !== idx);
+    const { error } = await sb.from('profiles').update({ brevo_slots: slots }).eq('id', uid);
+    if (error) throw error;
+
+    App.userProfile.brevo_slots = slots;
+    if (idx === 0) App.userProfile.brevo_key = '';
+    localStorage.setItem('lf_profile', JSON.stringify(App.userProfile));
+
     toast('Slot cleared', 'success');
     loadBrevoSlots();
-  } catch(e) { toast('Error: ' + e.message, 'error'); }
+  } catch (err) {
+    toast('Error: ' + err.message, 'error');
+  }
 }
+
+// ── REGISTER AUTH HOOK (runs after Supabase session confirmed) ────────────────
+window._lfAuthHooks = window._lfAuthHooks || [];
+window._lfAuthHooks.push(function(user) {
+  // Pre-fill schedule campaign select when it exists
+  const schedSel = document.getElementById('scheduleCampaignSelect');
+  if (schedSel) populateScheduleCampaignSelect();
+  // Load profile settings fresh from Supabase
+  loadProfileSettings();
+});
