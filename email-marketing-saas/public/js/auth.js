@@ -55,11 +55,45 @@ function initAuth() {
   });
 }
 
-function onSignedIn(session) {
+async function onSignedIn(session) {
   hideAuthOverlay();
+  // Immediately show basic info from the JWT
   updateUserUI(session.user);
+
+  // Fetch the real profile from server — this has the actual is_admin & plan values
+  try {
+    const data = await apiFetch('/api/user/profile');
+    if (data?.user) applyProfile(data.user);
+  } catch (e) {
+    console.warn('[Auth] Could not fetch profile from server:', e.message);
+  }
+
   // Trigger app init (defined in app.js)
   if (typeof onAuthReady === 'function') onAuthReady(session.user);
+}
+
+// applyProfile — update the whole UI from the real profiles table row
+function applyProfile(profile) {
+  const isAdmin = profile.is_admin === true;
+  const plan    = profile.plan     || 'free';
+  const name    = profile.name     || profile.email?.split('@')[0] || 'User';
+
+  const nameEl   = document.getElementById('userName');
+  const avatarEl = document.getElementById('userAvatar');
+  const planEl   = document.querySelector('.user-plan');
+  const adminNav = document.getElementById('adminNavItem');
+
+  if (nameEl)   nameEl.textContent   = name;
+  if (avatarEl) avatarEl.textContent = name.charAt(0).toUpperCase();
+  if (planEl)   planEl.textContent   = plan.charAt(0).toUpperCase() + plan.slice(1) + ' Plan';
+  // Show admin nav only for real admins
+  if (adminNav) adminNav.style.display = isAdmin ? 'flex' : 'none';
+
+  if (window.App) {
+    App.userProfile = Object.assign({}, App.userProfile, profile, { name, plan, isAdmin, is_admin: isAdmin });
+    App.isPremium   = plan === 'premium' || isAdmin;
+    App.isAdmin     = isAdmin;
+  }
 }
 
 function onSignedOut() {
@@ -198,8 +232,8 @@ function setAuthLoading(btn, loading) {
 function updateUserUI(user) {
   if (!user) return;
   const name   = user.user_metadata?.name || user.email?.split('@')[0] || 'User';
-  const plan   = user.user_metadata?.plan || 'Free';
-  const isAdmin = user.user_metadata?.is_admin || false;
+  const plan   = user.user_metadata?.plan || 'free';
+  const isAdmin = false; // will be set correctly by applyProfile() after API fetch
 
   const nameEl   = document.getElementById('userName');
   const avatarEl = document.getElementById('userAvatar');
@@ -209,13 +243,12 @@ function updateUserUI(user) {
   if (nameEl)   nameEl.textContent   = name;
   if (avatarEl) avatarEl.textContent = name.charAt(0).toUpperCase();
   if (planEl)   planEl.textContent   = plan.charAt(0).toUpperCase() + plan.slice(1) + ' Plan';
-  if (adminNav && isAdmin) adminNav.style.display = 'flex';
+  // adminNavItem visibility is controlled by applyProfile() after real profile fetch
 
   // Store in App state for use by app.js
   if (window.App) {
-    App.userProfile = { ...App.userProfile, name, email: user.email, plan, isAdmin };
-    App.isPremium = plan === 'premium' || isAdmin;
-    App.isAdmin   = isAdmin;
+    // Set basic info — applyProfile() will overwrite is_admin/isPremium after API fetch
+    App.userProfile = Object.assign({}, App.userProfile, { name, email: user.email, plan });
   }
 }
 
