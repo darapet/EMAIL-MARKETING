@@ -26,12 +26,11 @@ const App = {
 function initSocket() {
   const serverUrl = window.location.origin;
 
-  // In dev mode (DEV_AUTH=true on server), pass userId in handshake auth.
-  // In production, pass the Firebase ID token — server verifies it and
-  // derives userId server-side; the client never controls its own identity.
-  const authPayload = window.__firebaseIdToken
-    ? { token: window.__firebaseIdToken }         // production
-    : { userId: getCurrentUserId() };             // local dev only
+  // Use the Supabase JWT from auth.js for socket auth
+  const token = (typeof getAuthToken === 'function' && getAuthToken()) || null;
+  const authPayload = token
+    ? { token }
+    : { userId: (typeof getCurrentUserId === 'function' && getCurrentUserId()) || 'anon' };
 
   App.socket = io(serverUrl, {
     transports: ['websocket'],
@@ -98,6 +97,8 @@ function navigateTo(page) {
     outreach:  ['Send Outreach', 'Email campaign builder'],
     analytics: ['Analytics', 'Performance metrics'],
     settings:  ['Settings', 'Account & configuration'],
+    templates: ['Email Templates', 'Manage reusable email templates'],
+    admin:     ['Admin Panel', 'Platform management'],
   };
   if (titles[page]) {
     document.getElementById('pageTitle').textContent    = titles[page][0];
@@ -109,8 +110,17 @@ function navigateTo(page) {
   // Page-specific init
   if (page === 'campaigns') renderCampaignsTable();
   if (page === 'leads')     populateCampaignFilter();
-  if (page === 'outreach')  populateEmailCampaignSelect();
+  if (page === 'outreach')  { populateEmailCampaignSelect(); if (typeof loadTemplates === 'function') loadTemplates(); }
   if (page === 'whatsapp')  populateBroadcastCampaignSelect();
+  if (page === 'templates') { if (typeof loadTemplates === 'function') loadTemplates(); }
+  if (page === 'admin')     { if (typeof loadAdminDashboard === 'function') loadAdminDashboard(); }
+
+  // Show premium gate on API keys settings if not premium
+  if (page === 'settings') {
+    const gate = document.getElementById('apiKeysPremiumGate');
+    const badge = document.getElementById('premiumKeysBadge');
+    if (gate && !App.isPremium) { gate.style.display = 'flex'; if(badge) badge.style.display='inline-flex'; }
+  }
 }
 
 // Delegate goto clicks everywhere
@@ -912,29 +922,16 @@ function toast(message, type = 'info') {
 }
 
 // ═══════════════════════════════════════════════════
-// 13. API HELPER
+// 13. API HELPER  (uses Supabase JWT from auth.js)
 // ═══════════════════════════════════════════════════
-async function apiFetch(url, options = {}) {
-  const defaults = {
-    headers: {
-      'Content-Type': 'application/json',
-      'X-User-Id':    getCurrentUserId(),
-    },
-  };
-  const res  = await fetch(url, { ...defaults, ...options, headers: { ...defaults.headers, ...(options.headers || {}) } });
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
-  return json;
-}
+// NOTE: apiFetch and getCurrentUserId are defined in auth.js (loaded first).
+// This file intentionally does NOT redefine them so the Supabase-based
+// versions from auth.js remain active.  Any legacy calls to X-User-Id
+// are superseded by the Authorization: Bearer header added in auth.js.
 
 // ═══════════════════════════════════════════════════
 // 14. UTILITY HELPERS
 // ═══════════════════════════════════════════════════
-function getCurrentUserId() {
-  let id = localStorage.getItem('lf_uid');
-  if (!id) { id = 'user_' + Math.random().toString(36).slice(2, 10); localStorage.setItem('lf_uid', id); }
-  return id;
-}
 
 function updateBadge(id, count) {
   const el = document.getElementById(id);
@@ -964,17 +961,21 @@ function downloadFile(filename, mimeType, content) {
 
 // ═══════════════════════════════════════════════════
 // 15. INIT
+// onAuthReady() is called by auth.js after Supabase confirms a session.
+// The DOMContentLoaded below only sets up UI that doesn't need auth.
 // ═══════════════════════════════════════════════════
-document.addEventListener('DOMContentLoaded', () => {
+
+// Called by auth.js after sign-in is confirmed
+function onAuthReady(user) {
   renderCountries(COUNTRIES);
   loadProfileIntoForm();
-  updateUserUI();
+  try { initSocket(); } catch (e) { console.warn('Socket.io unavailable — demo mode'); }
+  loadCampaigns().catch(() => console.warn('API unavailable — demo mode'));
+}
 
-  // Try to connect socket — graceful fallback if server not running
-  try { initSocket(); } catch (e) { console.warn('Socket.io not available — running in demo mode'); }
-
-  // Load initial data
-  loadCampaigns().catch(() => console.warn('API not available — running in demo mode'));
+document.addEventListener('DOMContentLoaded', () => {
+  // initAuth() is called by the inline script at bottom of index.html.
+  // App data loading happens in onAuthReady() after Supabase confirms session.
 
   // Sidebar toggle on mobile
   document.getElementById('sidebarToggle').addEventListener('click', () => {
